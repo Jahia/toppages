@@ -50,7 +50,6 @@
                         <div class="form-group-sm">
                             <label for="siteName"><fmt:message key="lbl.siteName"/></label>
                             <form:input class="form-control" id="siteName" path="siteName"/>
-
                         </div>
 
                         <div class="form-group-sm">

@@ -118,37 +118,37 @@
                     </div>
                     <div id="allTopPagesNodes">
                         <c:if test="${not empty allNodes}">
-                            <table class="table table-bordered table-striped table-hover">
-                                <thead class="thead-ligh">
-                                <th scope="col"> Site Configuration Name</th>
-                                <th scope="col"> Node Name</th>
-                                <th scope="col"> Path</th>
-                                <th scope="col"> Last Published</th>
-                                <th scope="col"> Action</th>
-                                </thead>
-                                <c:forEach items="${allNodes}" var="node">
-                                    <tr>
-                                        <td> ${node.jahiaSite} </td>
-                                        <td> ${node.name} </td>
-                                        <td> ${node.path}</td>
-                                        <td>
-                                            <c:choose>
-                                                <c:when test="${empty node.lastPublished}">
-                                                    Not published
-                                                </c:when>
-                                                <c:otherwise>
-                                                    ${node.lastPublished}
-                                                </c:otherwise>
-                                            </c:choose>
-                                        </td>
-                                        <td>
-                                            <c:url value="${url.server}/cms/edit/default/${node.defaultLanguage}/${node.parentPage}.html"
-                                                   var="editUrl"/>
-                                            <a href="${editUrl}" target="_blank"> View Page </a></td>
-                                    </tr>
-                                </c:forEach>
-                            </table>
-                        </c:if>
+                                <table class="table table-bordered table-striped table-hover">
+                                    <thead class="thead-ligh">
+                                    <th scope="col"> Site Configuration Name</th>
+                                    <th scope="col"> Node Name</th>
+                                    <th scope="col"> Path</th>
+                                    <th scope="col"> Last Published</th>
+                                    <th scope="col"> Action</th>
+                                    </thead>
+                                    <c:forEach items="${allNodes}" var="node">
+                                        <tr>
+                                            <td> ${node.jahiaSite} </td>
+                                            <td> ${node.name} </td>
+                                            <td> ${node.path}</td>
+                                            <td>
+                                                <c:choose>
+                                                    <c:when test="${empty node.lastPublished}">
+                                                        Not published
+                                                    </c:when>
+                                                    <c:otherwise>
+                                                        ${node.lastPublished}
+                                                    </c:otherwise>
+                                                </c:choose>
+                                            </td>
+                                            <td>
+                                                <c:url value="${url.server}/cms/edit/default/${node.defaultLanguage}/${node.parentPage}.html"
+                                                       var="editUrl"/>
+                                                <a href="${editUrl}" target="_blank"> View Page </a></td>
+                                        </tr>
+                                    </c:forEach>
+                                </table>
+                            </c:if>
                     </div>
                 </form:form>
             </div>

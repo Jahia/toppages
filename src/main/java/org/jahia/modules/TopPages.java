@@ -26,7 +26,6 @@ import java.util.*;
 
 public class TopPages {
 
-
     Logger logger = LoggerFactory.getLogger(TopPages.class);
 
     @Autowired
