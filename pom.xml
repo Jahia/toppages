@@ -54,10 +54,15 @@
   </parent>
   <groupId>org.toppages.modules</groupId>
   <artifactId>toppages</artifactId>
-  <version>2.0</version>
+  <version>2.0.1-SNAPSHOT</version>
   <packaging>bundle</packaging>
   <name>topPages</name>
   <description>This is a community module to get the top pages from awstats, compatible with Jahia 8</description>
+  <scm>
+    <connection>scm:git:git@github.com:Jahia/toppages.git</connection>
+    <developerConnection>scm:git:git@github.com:Jahia/toppages.git</developerConnection>
+    <url>https://github.com/Jahia/toppages.git</url>
+  </scm>
   <properties>
     <jahia-depends>default,bootstrap3-core,serverSettings</jahia-depends>
     <require-capability>osgi.extender;filter:="(osgi.extender=org.jahia.bundles.blueprint.extender.config)"</require-capability>
