@@ -192,14 +192,16 @@ public class ConfigurationUtil {
     /**
      * Every report configuration, in repository order.
      *
-     * <p>Read-only: unlike {@link #ensureConfigRoot()} it never creates the configuration root, so
-     * a caller that only lists - the GraphQL query, the choice list - cannot write to the
-     * repository as a side effect.
+     * <p>Read-only: it never creates the configuration root, so a caller that only lists - the
+     * GraphQL query, the choice list, the administration screen - cannot write to the repository
+     * as a side effect. {@code /settings/top-pages} comes into existence with the first
+     * configuration that is saved, and until then this answers an empty list rather than an
+     * error, which is exactly the empty state the administration screen renders.
      *
      * <p>A configuration that cannot be read is skipped and logged, not allowed to empty or
      * truncate the answer: a listing exists to show what is configured, and one that hides
      * everything because of a single bad node is worse than useless. The same reasoning as the
-     * per-node handling in the administration page's top-pages listing.
+     * per-node handling in TopPagesNodeLister.
      *
      * @return the configurations that could be read, in repository order; empty when there are
      *         none or the root does not exist
@@ -231,31 +233,6 @@ public class ConfigurationUtil {
         } catch (RepositoryException e) {
             logger.error("TopPages: Unable to list the report configurations", e);
             return new ArrayList<>();
-        }
-    }
-
-    /**
-     * Create the configuration root, and the {@code /settings} node it hangs from, when they do
-     * not exist yet.
-     *
-     * <p>The web flow calls this when the settings page is opened, which is how
-     * {@code /settings/top-pages} comes into existence on a repository that has never been
-     * configured.
-     */
-    public void ensureConfigRoot() {
-        try {
-            jcrTemplate.doExecuteWithSystemSession(
-                    new JCRCallback<Boolean>() {
-                        @Override
-                        public Boolean doInJCR(JCRSessionWrapper session) throws RepositoryException {
-                            getOrCreateConfigRoot(session);
-                            session.save();
-                            return Boolean.TRUE;
-                        }
-                    }
-            );
-        } catch (RepositoryException e) {
-            logger.error("TopPages: Unable to create the configuration root", e);
         }
     }
 

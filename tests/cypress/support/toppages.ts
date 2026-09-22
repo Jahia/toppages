@@ -33,11 +33,29 @@ export const ensureModuleEnabled = (): void => {
 export const SETTINGS_ROOT = '/settings/top-pages';
 
 /**
- * The server-settings page. This is the module's own `iframeUrl`, declared in
- * src/main/resources/javascript/apps/register.js -- visiting it directly renders the
- * webflow without the surrounding administration shell, which is what we want to assert on.
+ * The administration screen, a React route registered by the module's Module Federation remote
+ * (src/javascript/registerRoutes.js) on the `administration-server-configuration` target.
+ *
+ * jahia-administration mounts every server-scoped adminRoute at `/administration/<route key>`
+ * (Administration.jsx builds the path that way), so this URL IS the route key, and the whole app
+ * shell boots around it. That is deliberate: the route only exists inside the shell, and asserting
+ * on it anywhere else would assert on something no administrator can reach.
  */
-export const SETTINGS_URL = `/cms/adminframe/default/${LANGUAGE}/settings.top-pages-configuration.html?redirect=false`;
+export const SETTINGS_URL = '/jahia/administration/top-pages-configuration';
+
+/** Data-sel-role selector, the attribute every element of the admin UI is marked with. */
+export const sel = (role: string): string => `[data-sel-role="${role}"]`;
+
+/**
+ * Open the administration screen as the user currently logged in.
+ *
+ * The app shell loads its remotes, resolves permissions and only then mounts the route, so the
+ * first assertion has to wait for the route's own marker rather than for the page to load.
+ */
+export const openSettings = (): void => {
+    cy.visit(SETTINGS_URL);
+    cy.get(sel('toppages-settings'), {timeout: 60000}).should('exist');
+};
 
 export interface SiteConfig {
     awStatsUrl?: string;
@@ -53,11 +71,12 @@ const nodeExists = (path: string): Cypress.Chainable<boolean> =>
     );
 
 /**
- * Create /settings/top-pages if the settings page has never been opened.
+ * Create /settings/top-pages when nothing has ever been configured.
  *
- * SiteconfigFlowHandler.init() creates it on first visit, so a spec that only uses the
- * UI never needs this -- but specs that seed configuration over GraphQL must not depend
- * on another spec having run first.
+ * Nothing creates it on a read any more: ConfigurationUtil.getSiteConfigs() is read-only and
+ * answers an empty list when the root is absent, and the first createSiteConfig() is what brings
+ * it into existence. Specs that seed configuration directly in the JCR therefore have to create
+ * the root themselves.
  */
 export const ensureSettingsRoot = (): void => {
     nodeExists('/settings').then(exists => {

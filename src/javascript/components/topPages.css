@@ -1,0 +1,190 @@
+/*
+ * The screen sits inside the Jahia administration shell, so it takes its palette from moonstone's
+ * own custom properties rather than re-declaring one: --color-gray_dark, --color-accent and the
+ * spacing scale are defined by the shell's GlobalStyle and follow whichever theme it is in.
+ * Fallbacks are given for every one of them, because this stylesheet also has to render correctly
+ * if it is ever loaded before the shell's variables exist.
+ */
+
+.toppages-settings {
+    --toppages-gutter: var(--spacing-large, 24px);
+    --toppages-radius: 4px;
+    --toppages-border: 1px solid var(--color-gray_light, #dcdfe1);
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--toppages-gutter);
+    padding: var(--toppages-gutter);
+    max-width: 1400px;
+}
+
+.toppages-settings__header {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-nano, 4px);
+    /* A rule rather than a box: the shell already frames the route, and a second card around the
+       title would only add a border for the sake of one. */
+    border-bottom: var(--toppages-border);
+    padding-bottom: var(--spacing-small, 8px);
+}
+
+.toppages-settings__lead,
+.toppages-card__lead {
+    color: var(--color-gray_dark, #5c6266);
+    max-width: 80ch;
+}
+
+.toppages-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-medium, 16px);
+    padding: var(--toppages-gutter);
+    border: var(--toppages-border);
+    border-radius: var(--toppages-radius);
+    background-color: var(--color-light, #fff);
+}
+
+.toppages-card__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-medium, 16px);
+    flex-wrap: wrap;
+}
+
+/* ---- banner ---------------------------------------------------------------------------- */
+
+.toppages-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-small, 8px);
+    padding: var(--spacing-small, 8px) var(--spacing-medium, 16px);
+    border-radius: var(--toppages-radius);
+    border-left: 4px solid var(--color-danger, #c31c1c);
+    background-color: var(--color-danger_light, #fdecec);
+}
+
+.toppages-banner--error .toppages-banner__text {
+    color: var(--color-danger_dark, #8c1414);
+}
+
+/* ---- tables ---------------------------------------------------------------------------- */
+
+.toppages-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+}
+
+.toppages-table th,
+.toppages-table td {
+    padding: var(--spacing-small, 8px) var(--spacing-medium, 16px);
+    border-bottom: var(--toppages-border);
+    vertical-align: middle;
+}
+
+.toppages-table thead th {
+    color: var(--color-gray_dark, #5c6266);
+    border-bottom-width: 2px;
+}
+
+.toppages-table tbody tr:hover {
+    background-color: var(--color-gray_light40, #f5f6f7);
+}
+
+/* Paths and URLs are the one thing in these tables that is read character by character. */
+.toppages-table__url {
+    font-family: ui-monospace, "SFMono-Regular", "Menlo", monospace;
+    font-size: 12px;
+    word-break: break-all;
+}
+
+.toppages-table__actions {
+    display: flex;
+    gap: var(--spacing-nano, 4px);
+    justify-content: flex-end;
+}
+
+.toppages-table__confirm td {
+    background-color: var(--color-warning_light, #fff6e5);
+}
+
+.toppages-table__confirm-actions {
+    display: flex;
+    gap: var(--spacing-small, 8px);
+    margin-top: var(--spacing-small, 8px);
+}
+
+/* ---- empty state ----------------------------------------------------------------------- */
+
+.toppages-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-nano, 4px);
+    padding: var(--spacing-big, 32px);
+    border: 1px dashed var(--color-gray_light, #dcdfe1);
+    border-radius: var(--toppages-radius);
+    color: var(--color-gray_dark, #5c6266);
+    text-align: center;
+}
+
+/* ---- form ------------------------------------------------------------------------------ */
+
+.toppages-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-medium, 16px);
+}
+
+.toppages-form__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: var(--spacing-medium, 16px);
+}
+
+.toppages-form__field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-nano, 4px);
+}
+
+.toppages-form__field--checkbox {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: var(--spacing-small, 8px);
+}
+
+.toppages-form__hint {
+    color: var(--color-gray_dark, #5c6266);
+}
+
+.toppages-form__error {
+    color: var(--color-danger, #c31c1c);
+}
+
+.toppages-form__actions {
+    display: flex;
+    gap: var(--spacing-small, 8px);
+}
+
+@media (max-width: 720px) {
+    .toppages-table,
+    .toppages-table thead,
+    .toppages-table tbody,
+    .toppages-table tr,
+    .toppages-table th,
+    .toppages-table td {
+        display: block;
+    }
+
+    .toppages-table thead {
+        display: none;
+    }
+
+    .toppages-table tbody tr {
+        border-bottom: 2px solid var(--color-gray_light, #dcdfe1);
+        padding: var(--spacing-small, 8px) 0;
+    }
+}

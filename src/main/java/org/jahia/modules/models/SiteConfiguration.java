@@ -1,25 +1,25 @@
 package org.jahia.modules.models;
 
-import org.hibernate.validator.constraints.NotEmpty;
-import org.jahia.utils.i18n.Messages;
-import org.springframework.binding.message.MessageBuilder;
-import org.springframework.binding.message.MessageResolver;
-import org.springframework.context.i18n.LocaleContextHolder;
-
 import java.io.Serializable;
-import java.util.Locale;
 
 
+/**
+ * One AWStats report configuration, as stored in a {@code jtopmix:siteConfig} node under
+ * {@code /settings/top-pages}.
+ *
+ * <p>A plain bean, carrying no framework of its own: it used to double as a Spring Web Flow form
+ * model, with bean-validation constraints and a message-resolver helper, and both went with the
+ * flow. The mandatory-field rules they expressed are now enforced where they belong - the GraphQL
+ * schema makes {@code name} and {@code awStatsUrl} non-null arguments, and
+ * {@link org.jahia.modules.utils.ConfigurationUtil} refuses an unsafe name - so the same input is
+ * still rejected, by the surface the caller actually reaches.
+ */
 public class SiteConfiguration implements Serializable {
 
-    @NotEmpty(message = "Please enter a Site Name")
     private String siteName;
-    @NotEmpty(message = "Please enter the awstats URL")
     private String reportUrl;
     private String includeFilter;
     private String excludeFilter;
-    private static final String BUNDLE = "resources.toppages";
-    private boolean toBeUpdated = false;
     private boolean titleFromHTML = false;
     private String titleSeparator;
 
@@ -38,15 +38,6 @@ public class SiteConfiguration implements Serializable {
 
     public void setTitleSeparator(String titleSeparator) {
         this.titleSeparator = titleSeparator;
-    }
-
-
-    public boolean isToBeUpdated() {
-        return toBeUpdated;
-    }
-
-    public void setToBeUpdated(boolean toBeUpdated) {
-        this.toBeUpdated = toBeUpdated;
     }
 
 
@@ -93,12 +84,6 @@ public class SiteConfiguration implements Serializable {
     public void setExcludeFilter(String excludeFilter) {
         this.excludeFilter = excludeFilter;
     }
-
-    public MessageResolver getMessage(String source, String bundleKey) {
-        Locale locale = LocaleContextHolder.getLocale();
-        return new MessageBuilder().error().source(source).defaultText(Messages.get(BUNDLE, bundleKey, locale)).build();
-    }
-
 
 }
 

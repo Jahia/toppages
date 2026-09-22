@@ -1,3 +1,73 @@
 {
-  "label": "Top Pages Settings"
+  "label": "Top Pages",
+  "settings": {
+    "title": "Top Pages",
+    "lead": "Top Pages components read a page-hit report produced by AWStats. A report configuration says where that report lives and which of its rows are kept; every configuration stored here is offered to editors when they place a Top Pages component.",
+    "error": {
+      "unknown": "The server refused the operation without saying why; see the server log."
+    },
+    "configurations": {
+      "title": "Report configurations",
+      "description": "Stored under /settings/top-pages, one node per configuration, shared by every site.",
+      "add": "Add a configuration",
+      "actions": "Actions",
+      "edit": "Edit",
+      "delete": "Delete",
+      "confirmDelete": "Delete the configuration \"{{name}}\"? Components bound to it will stop resolving a report.",
+      "confirmDeleteYes": "Delete it",
+      "empty": "No site configuration found",
+      "emptyHint": "Add one to point the Top Pages components at an AWStats report."
+    },
+    "form": {
+      "create": "New report configuration",
+      "edit": "Editing \"{{name}}\"",
+      "save": "Save configuration",
+      "update": "Update configuration",
+      "cancel": "Cancel"
+    },
+    "field": {
+      "name": {
+        "label": "Name",
+        "hint": "Also the JCR node name, so letters, digits, dot, dash and underscore only.",
+        "required": "Please enter a name"
+      },
+      "awStatsUrl": {
+        "label": "AWStats report URL",
+        "hint": "Location of the awstats script, for example http://stats.example.com/awstats.pl",
+        "required": "Please enter the awstats URL"
+      },
+      "includeFilter": {
+        "label": "Include filter",
+        "hint": "Passed to AWStats as urlfilter; leave empty to keep every row."
+      },
+      "excludeFilter": {
+        "label": "Exclude filter",
+        "hint": "Comma-separated URL fragments dropped from the report."
+      },
+      "titleFromHTML": {
+        "label": "Read titles from the page HTML",
+        "hint": "Fetches each page and uses its title element, instead of the label AWStats reports."
+      },
+      "titleSeparator": {
+        "label": "Title separator",
+        "hint": "Everything after this separator is stripped from a title read from HTML."
+      }
+    },
+    "nodes": {
+      "title": "Top Pages components",
+      "description": "Every jtopmix:topPages node in the repository, with the configuration it reads and the page it is rendered in. This is the screen to open when a component shows nothing.",
+      "list": "Show all Top Pages nodes",
+      "empty": "No Top Pages node exists in this repository.",
+      "notPublished": "Not published",
+      "viewPage": "View page",
+      "noPage": "No enclosing page",
+      "column": {
+        "reportConfiguration": "Report configuration",
+        "name": "Node name",
+        "path": "Path",
+        "lastPublished": "Last published",
+        "page": "Page"
+      }
+    }
+  }
 }

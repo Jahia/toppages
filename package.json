@@ -1,0 +1,34 @@
+{
+  "name": "@jahia/toppages",
+  "version": "2.0.3-SNAPSHOT",
+  "description": "Administration UI for the topPages module, registered into the Jahia app shell",
+  "license": "MIT",
+  "private": true,
+  "main": "src/javascript/init.js",
+  "scripts": {
+    "build": "webpack --mode=production",
+    "build:dev": "webpack --mode=development",
+    "watch": "webpack --mode=development --watch"
+  },
+  "dependencies": {
+    "@apollo/client": "^3.5.10",
+    "@jahia/moonstone": "^2.5.3",
+    "@jahia/ui-extender": "^1.0.3",
+    "graphql-tag": "^2.11.0",
+    "i18next": "^19.0.3",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-i18next": "^11.2.7"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.24.0",
+    "@babel/preset-env": "^7.24.0",
+    "@babel/preset-react": "^7.23.3",
+    "@jahia/webpack-config": "^1.1.1",
+    "babel-loader": "^9.1.3",
+    "css-loader": "^6.10.0",
+    "style-loader": "^3.3.4",
+    "webpack": "^5.90.3",
+    "webpack-cli": "^5.1.4"
+  }
+}

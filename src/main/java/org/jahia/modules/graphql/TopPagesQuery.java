@@ -6,6 +6,8 @@ import graphql.annotations.annotationTypes.GraphQLName;
 import graphql.annotations.annotationTypes.GraphQLNonNull;
 import org.jahia.modules.graphql.provider.dxm.security.GraphQLRequiresPermission;
 import org.jahia.modules.models.SiteConfiguration;
+import org.jahia.modules.models.TopPagesNode;
+import org.jahia.modules.utils.TopPagesNodeLister;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -43,5 +45,19 @@ public class TopPagesQuery {
         // an unreachable path exists.
         SiteConfiguration config = TopPagesGraphQL.configurationService().getSiteConfig(name);
         return config == null ? null : new GqlReportConfiguration(config);
+    }
+
+    @GraphQLField
+    @GraphQLName("contentNodes")
+    @GraphQLNonNull
+    @GraphQLDescription("Every jtopmix:topPages content node in the edit workspace, for diagnostics: "
+            + "which report each one reads, and which page - if any - it is rendered in")
+    @GraphQLRequiresPermission(TopPagesPermissions.ADMINISTRATION)
+    public List<GqlTopPagesNode> getContentNodes() {
+        List<GqlTopPagesNode> result = new ArrayList<>();
+        for (TopPagesNode node : TopPagesNodeLister.listAll()) {
+            result.add(new GqlTopPagesNode(node));
+        }
+        return result;
     }
 }

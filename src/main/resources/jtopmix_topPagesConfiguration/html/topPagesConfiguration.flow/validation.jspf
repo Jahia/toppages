@@ -1,8 +1,0 @@
-<c:if test="${!empty flowRequestContext.messageContext.allMessages}">
-    <c:forEach var="error" items="${flowRequestContext.messageContext.allMessages}">
-        <div class="alert alert-error">
-            <button type="button" class="close" data-dismiss="alert">&times;</button>
-               ${fn:escapeXml(error.text)}
-        </div>
-    </c:forEach>
-</c:if>

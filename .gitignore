@@ -13,3 +13,12 @@ target
 
 # Jahia DX Studio
 repository.xml.generated
+
+# JavaScript build (see webpack.config.js). node/ and node_modules/ are the toolchain
+# frontend-maven-plugin downloads; everything webpack writes into javascript/apps is generated --
+# only jahia.json in that directory is a source file.
+/node
+/node_modules
+/src/main/resources/javascript/apps/*.js
+/src/main/resources/javascript/apps/*.js.map
+/src/main/resources/javascript/apps/*.LICENSE.txt

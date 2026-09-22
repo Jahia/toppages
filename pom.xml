@@ -66,13 +66,13 @@
   <properties>
     <jahia-depends>default,bootstrap3-core,serverSettings</jahia-depends>
     <!--
-      NOT for dependency injection: every bean is an OSGi Declarative Services component and
-      META-INF/spring/toppages.xml declares none. Spring Web Flow is the only reason this is still
-      here: WebflowDispatcherScript resolves the flow executor through
-      JahiaTemplatesPackage.getContext(), which is null unless the Spring extender built a context
-      for the module, and the server-settings page then answers 500. Goes away with the webflow.
+      No osgi.extender require-capability, and no META-INF/spring: this module has no Spring
+      context and needs none. Every service is an OSGi Declarative Services component, and the
+      administration screen is a React route in the Jahia app shell rather than a Spring Web Flow -
+      the flow was the only thing that needed a context, because WebflowDispatcherScript resolves
+      its executor through JahiaTemplatesPackage.getContext().
     -->
-    <require-capability>osgi.extender;filter:="(osgi.extender=org.jahia.bundles.blueprint.extender.config)"</require-capability>
+    <node.version>v18.20.4</node.version>
   </properties>
   <dependencies>
     <!--
@@ -153,6 +153,54 @@
           <source>8</source>
           <target>8</target>
         </configuration>
+      </plugin>
+      <!--
+        The administration UI is a React application, bundled by webpack as a Module Federation
+        remote (see webpack.config.js). It has to be built before process-resources, because its
+        output lands in src/main/resources/javascript/apps and is picked up from there like any
+        other static resource - hence generate-resources for all three executions.
+
+        Node and npm are downloaded into ./node rather than taken from the machine, so the jar does
+        not depend on whatever happens to be on the developer's PATH; ./node and node_modules are
+        both git-ignored. `npm ci` rather than `npm install`, so the build installs exactly what
+        package-lock.json pins and fails instead of silently resolving something newer.
+      -->
+      <plugin>
+        <groupId>com.github.eirslett</groupId>
+        <artifactId>frontend-maven-plugin</artifactId>
+        <version>1.15.4</version>
+        <executions>
+          <execution>
+            <id>install-node-and-npm</id>
+            <phase>generate-resources</phase>
+            <goals>
+              <goal>install-node-and-npm</goal>
+            </goals>
+            <configuration>
+              <nodeVersion>${node.version}</nodeVersion>
+            </configuration>
+          </execution>
+          <execution>
+            <id>npm-ci</id>
+            <phase>generate-resources</phase>
+            <goals>
+              <goal>npm</goal>
+            </goals>
+            <configuration>
+              <arguments>ci</arguments>
+            </configuration>
+          </execution>
+          <execution>
+            <id>npm-run-build</id>
+            <phase>generate-resources</phase>
+            <goals>
+              <goal>npm</goal>
+            </goals>
+            <configuration>
+              <arguments>run build</arguments>
+            </configuration>
+          </execution>
+        </executions>
       </plugin>
     </plugins>
   </build>

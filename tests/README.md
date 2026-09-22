@@ -62,23 +62,23 @@ one was copied from still have that bug.
 
 | Spec                  | Covers                                                                              |
 |-----------------------|-------------------------------------------------------------------------------------|
-| `01-serverSettings`   | The webflow at *Administration → Server → Configuration → Top Pages*: create, validate, list, edit, rename, reject duplicates, delete — each verified in the UI *and* under `/settings/top-pages` |
+| `01-serverSettings`   | The React administration route at *Administration → Server → Configuration → Top Pages*: create, validate, list, edit, rename, reject duplicates, delete — each verified in the UI *and* under `/settings/top-pages` |
 | `02-topPagesActions`  | `updateTopPages` / `getTopPages`: report parsing and ranking, `jsonResult` caching, multi-month aggregation, `titleFromHTML`, global-config inheritance, the unreachable-report error path, the admin node listing *including a node that lives outside any page*, the live/anonymous path, the POST-only guard on `updateTopPages` and its refusal of an anonymous caller |
 | `03-editorExperience` | The component's visibility and type label in jContent, asserted as `root` **and** as the editor `mathias` |
-| `04-permissions`      | Who may open the server-settings page, with an administrator positive control       |
+| `04-permissions`      | Who the app shell renders the administration route for, with two administrator positive controls: the route by URL, and the entry an administrator actually clicks under *Server → Configuration* |
 | `05-componentView`    | The component's own view (`jtopmix_topPages/html/topPages.jsp`) rendered in a page: the edit-mode button, the POST it fires and the list the script builds, the `customCSS` class actually being applied, the escaping of a stored title in edit mode **and for an anonymous live visitor**, and the live/anonymous rendering |
-| `06-graphqlApi`       | The GraphQL API over the report configurations: the schema shape (exactly one field on the root `Query` and one on the root `Mutation`), the CRUD round trip, the five properties on the created node, the refusal of an unsafe name and of a duplicate, and the authorization matrix for `root` / `mathias` / anonymous |
+| `06-graphqlApi`       | The GraphQL API over the report configurations: the schema shape (exactly one field on the root `Query` and one on the root `Mutation`), the CRUD round trip, the five properties on the created node, the refusal of an unsafe name and of a duplicate, and the authorization matrix for `root` / `mathias` / anonymous. The diagnostic `contentNodes` field is driven through the UI instead, in `02-topPagesActions` |
 
 ## Things that will bite you
 
 Each of these cost real debugging time; all of them fail in a way that points somewhere else.
 
-- **The module must be enabled on `systemsite`.** A server-settings page is a template
-  applied to the `jnt:globalSettings` node `/settings`, and Jahia only resolves templates
-  from modules installed on the *system* site. Without it the page is a bare HTTP 500
-  (`TemplateNotFoundException`) that says nothing about modules. `ensureModuleEnabled()`
-  does this, from the spec — it cannot go in `assets/provisioning.yml`, because the
-  harness runs the manifest *before* it deploys the module artifact.
+- **The module must be enabled on `systemsite`.** `ensureModuleEnabled()` does this, from
+  the spec — it cannot go in `assets/provisioning.yml`, because the harness runs the
+  manifest *before* it deploys the module artifact. The administration screen no longer
+  depends on it (it is a React route in the app shell, not a template applied to the
+  `jnt:globalSettings` node `/settings`), but the configuration nodes live outside any site
+  and the suite keeps enabling both.
 - **The provisioning operation is `enable:`, not `enableModule:`.** The API answers an
   unknown operation with HTTP 200 and does nothing, so a wrong name fails silently.
 - **Actions need three things at once**, handled by `callAction()`:
@@ -119,6 +119,29 @@ Each of these cost real debugging time; all of them fail in a way that points so
   response as well as on the parsed DOM. The `jcr:title` carrier reaches **any anonymous
   visitor** on an ordinary live page; only `lastErrorReceived` is administrator-only,
   because the JSP keeps it inside `<c:if test="${renderContext.editMode}">`.
+
+- **The administration screen is a Module Federation remote, so "not rendered" and "not yet
+  rendered" look the same.** `/jahia/administration/top-pages-configuration` boots the whole
+  app shell, which loads every module's `remoteEntry.js`, resolves permissions and only then
+  mounts the route. A negative assertion taken straight after `cy.visit()` therefore passes
+  before anything has had a chance to render. `openSettings()` waits for the route's own
+  `data-sel-role="toppages-settings"`; 04-permissions waits until the module's `adminRoute`
+  is in `window.jahia.uiExtender.registry` before asserting the screen is *absent*, so the
+  negative is about the permission and not about a module that never loaded.
+- **The admin route URL is the registry key.** `jahia-administration` mounts every
+  server-scoped `adminRoute` at `/administration/<key>` (`Administration.jsx`), with `exact`
+  and `strict`. A trailing slash or a guessed `/administration/server/...` path renders the
+  404 route, not the screen.
+- **An anonymous visitor gets 401 and Jahia's login form on that same URL** — no redirect.
+  Asserting on `cy.url()` proves nothing; assert `#loginForm` is there.
+- **The administration tree shows its groups collapsed.** `jahia-administration` only expands
+  a group when something inside it is already selected, so arriving on `/jahia/administration`
+  shows *Configuration* closed and `cy.contains('Top Pages')` never resolves. Click the group
+  first.
+- **i18next splits keys on `.`.** A locale file with `"name": "Name"` and a sibling
+  `"name.hint": "..."` renders the raw key `settings.field.name.hint`, because the lookup
+  walks `settings → field → name → hint` and `name` is a string. Every field's label, hint
+  and error live under one object, `settings.field.<id>.{label,hint,required}`.
 
 - **`cy.apolloClient()` cannot be anonymous.** With neither a token nor a username it falls
   back to `Basic root:$SUPER_USER_PASSWORD`, so an "anonymous" apollo client is quietly `root`
