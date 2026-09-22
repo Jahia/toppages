@@ -1,0 +1,54 @@
+# NOTE: `container_name` is fixed (and global) here, exactly as in every other Jahia
+# module harness -- only one module's stack can be up at a time. Do not add a Compose
+# `name:` to work around that: it isolates the project without isolating the container
+# names, so a stale `jahia` container from another harness turns into a hard conflict
+# instead of being recreated.
+services:
+    jahia:
+        image: '${JAHIA_IMAGE}'
+        container_name: jahia
+        ports:
+            - '8080:8080'
+            - '8000:8000'
+        environment:
+            - SUPER_USER_PASSWORD=${SUPER_USER_PASSWORD}
+            - JAHIA_LICENSE=${JAHIA_LICENSE}
+            - JPDA=true
+        extra_hosts:
+            - jahia:127.0.0.1
+        networks:
+            - stack
+    # Static AWStats report origin.
+    # TopPages fetches its statistics over HTTP from an awstats.pl CGI; this container
+    # stands in for it with a fixed HTML fixture so the parsing path is deterministic.
+    # Only the jahia container talks to it; AWSTATS_PORT is published purely for manual
+    # inspection, and is configurable because 8080/8081 are routinely already taken.
+    awstats:
+        image: '${AWSTATS_IMAGE}'
+        container_name: awstats
+        ports:
+            - '${AWSTATS_PORT:-8087}:80'
+        volumes:
+            - ./assets/awstats:/usr/share/nginx/html:ro
+        networks:
+            - stack
+    # Cypress container
+    cypress:
+        image: '${TESTS_IMAGE}'
+        # https://github.com/cypress-io/cypress/issues/350
+        ipc: host
+        container_name: cypress
+        depends_on:
+            - jahia
+            - awstats
+        environment:
+            - MANIFEST=${MANIFEST}
+            - SUPER_USER_PASSWORD=${SUPER_USER_PASSWORD}
+            - JAHIA_URL=http://jahia:8080
+            - AWSTATS_BASE_URL=${AWSTATS_BASE_URL}
+            - NEXUS_USERNAME=${NEXUS_USERNAME}
+            - NEXUS_PASSWORD=${NEXUS_PASSWORD}
+        networks:
+            - stack
+networks:
+    stack:

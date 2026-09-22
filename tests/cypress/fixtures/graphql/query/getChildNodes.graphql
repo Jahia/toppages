@@ -1,0 +1,16 @@
+query GetChildNodes($path: String!) {
+    jcr(workspace: EDIT) {
+        nodeByPath(path: $path) {
+            path
+            children {
+                nodes {
+                    name
+                    path
+                    primaryNodeType {
+                        name
+                    }
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,49 @@
+- karafCommand: "log:log 'START - provisioning'"
+
+# toppages declares `jahia-depends: default,bootstrap3-core,serverSettings`, so the
+# module stays STOPPED until both are present. bootstrap3-core comes with the Digitall
+# set below; serverSettings and the GraphQL provider (used by the specs to read JCR
+# state back) are pulled explicitly in case the base image ships neither.
+- karafCommand: "log:log 'START - Install toppages dependencies'"
+- installBundle:
+      - 'mvn:org.jahia.modules/graphql-dxm-provider/LATEST'
+      - 'mvn:org.jahia.modules/serverSettings/LATEST'
+  autoStart: true
+  uninstallPreviousVersion: false
+- karafCommand: "log:log 'END - Install toppages dependencies'"
+
+- karafCommand: "log:log 'START - Install Digitall bundles'"
+- installBundle:
+      - 'mvn:org.jahia.modules/bookmarks/3.1.0'
+      - 'mvn:org.jahia.modules/bootstrap3-components/4.3.0'
+      - 'mvn:org.jahia.modules/bootstrap3-core/4.3.0'
+      - 'mvn:org.jahia.modules/calendar/3.2.0'
+      - 'mvn:org.jahia.modules/default-skins/8.2.0'
+      - 'mvn:org.jahia.modules/digitall/3.0.0'
+      - 'mvn:org.jahia.modules/dx-base-demo-components/3.0.0'
+      - 'mvn:org.jahia.modules/dx-base-demo-core/2.6.0'
+      - 'mvn:org.jahia.modules/dx-base-demo-templates/4.0.0'
+      - 'mvn:org.jahia.modules/event/4.0.1'
+      - 'mvn:org.jahia.modules/font-awesome/6.1.5'
+      - 'mvn:org.jahia.modules/grid/8.1.0'
+      - 'mvn:org.jahia.modules/legacy-default-components/1.0.0'
+      - 'mvn:org.jahia.modules/location/3.2.0'
+      - 'mvn:org.jahia.modules/news/3.4.0'
+      - 'mvn:org.jahia.modules/person/3.2.0'
+      - 'mvn:org.jahia.modules/press/3.1.0'
+      - 'mvn:org.jahia.modules/rating/3.3.0'
+      - 'mvn:org.jahia.modules/skins/8.2.0'
+      - 'mvn:org.jahia.modules/topstories/3.0.0'
+  autoStart: true
+  uninstallPreviousVersion: true
+- karafCommand: "log:log 'END - Install Digitall bundles'"
+
+# users.zip brings the named editors (mathias, anne, irina, jane) the permission
+# specs log in as; without it every assertion would run as root and prove nothing
+# about authorisation.
+- karafCommand: "log:log 'START - Import Digitall site'"
+- import: "jar:mvn:org.jahia.modules/digitall/RELEASE/zip/import!/users.zip"
+- importSite: "jar:mvn:org.jahia.modules/digitall/RELEASE/zip/import!/Digitall.zip"
+- karafCommand: "log:log 'END - Import Digitall site'"
+
+- karafCommand: "log:log 'END - provisioning'"
