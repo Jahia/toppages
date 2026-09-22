@@ -57,6 +57,14 @@
   Everything the script needs travels as an escaped data attribute rather than as literal
   JavaScript: jsonResult and jcr:title are stored content, so interpolating them into a
   <script> block is a stored XSS and, for an absent jsonResult, invalid JavaScript.
+
+  The script below uses jQuery, which this module deliberately does not declare. jQuery is
+  supplied by the site's template set: Digitall's page template asks for `jquery.min.js`,
+  which Jahia's static asset mapping resolves to the `jquery` system module
+  (/modules/jquery/javascript/jquery-3.7.1.min.js). It never came from bootstrap3-core --
+  that bundle ships only bootstrap.min.js, its CSS and the glyphicon fonts. The bootstrap
+  class names used above (btn, alert, close, data-dismiss) are likewise styled by whatever
+  bootstrap the surrounding template set already loads.
 --%>
 <div id="${resultDivID}"
      data-title="${fn:escapeXml(title)}"

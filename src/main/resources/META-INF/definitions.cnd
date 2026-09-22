@@ -20,8 +20,6 @@
  - titleFromHTML (boolean) = 'false'
  - titleSeparator (string)
 
-[jtopmix:topPagesConfiguration] > jnt:content, jmix:siteComponent, mix:title, jmix:studioOnly
-
 [jtopmix:siteConfig] > jnt:content, mix:title, jmix:studioOnly
  - siteName (undefined)
  - awStatsUrl (string)

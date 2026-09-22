@@ -64,7 +64,7 @@
     <tag>HEAD</tag>
   </scm>
   <properties>
-    <jahia-depends>default,bootstrap3-core,serverSettings</jahia-depends>
+    <jahia-depends>default,serverSettings</jahia-depends>
     <!--
       No osgi.extender require-capability, and no META-INF/spring: this module has no Spring
       context and needs none. Every service is an OSGi Declarative Services component, and the

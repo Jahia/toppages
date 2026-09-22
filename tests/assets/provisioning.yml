@@ -1,9 +1,8 @@
 - karafCommand: "log:log 'START - provisioning'"
 
-# toppages declares `jahia-depends: default,bootstrap3-core,serverSettings`, so the
-# module stays STOPPED until both are present. bootstrap3-core comes with the Digitall
-# set below; serverSettings and the GraphQL provider (used by the specs to read JCR
-# state back) are pulled explicitly in case the base image ships neither.
+# toppages declares `jahia-depends: default,serverSettings`, so the module stays STOPPED
+# until serverSettings is present. serverSettings and the GraphQL provider (used by the
+# specs to read JCR state back) are pulled explicitly in case the base image ships neither.
 - karafCommand: "log:log 'START - Install toppages dependencies'"
 - installBundle:
       - 'mvn:org.jahia.modules/graphql-dxm-provider/LATEST'
@@ -12,6 +11,11 @@
   uninstallPreviousVersion: false
 - karafCommand: "log:log 'END - Install toppages dependencies'"
 
+# bootstrap3-core stays here even though toppages no longer depends on it: Digitall needs
+# it in its own right. `dx-base-demo-templates` declares
+# `Jahia-Depends: ...,bootstrap3-core,...` and serves the page template's `bootstrap.min.js`
+# / `bootstrap.min.css` from it, and `bootstrap3-components` declares
+# `Jahia-Depends: bootstrap3-core`. Dropping it would leave the demo set unresolved.
 - karafCommand: "log:log 'START - Install Digitall bundles'"
 - installBundle:
       - 'mvn:org.jahia.modules/bookmarks/3.1.0'

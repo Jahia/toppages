@@ -1,61 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <content xmlns:j="http://www.jahia.org/jahia/1.0" xmlns:jcr="http://www.jcp.org/jcr/1.0">
     <modules jcr:primaryType="jnt:modules">
-        <toppages j:dependencies="bootstrap3-core default serverSettings"
+        <toppages j:dependencies="default serverSettings"
                 j:modulePriority="0"
                 j:moduleType="module"
                 j:title="topPages"
                 jcr:mixinTypes="jmix:hasExternalProviderExtension"
                 jcr:primaryType="jnt:module">
-                
+
                 <portlets jcr:primaryType="jnt:portletFolder"/>
                 <files jcr:primaryType="jnt:folder"/>
                 <contents jcr:primaryType="jnt:contentFolder"/>
                 <templates j:rootTemplatePath="/base" jcr:primaryType="jnt:templatesFolder">
-                    <files jcr:primaryType="jnt:folder">
-                        <next-page.png j:height="24"
-                              j:width="24"
-                              jcr:mixinTypes="jmix:image"
-                              jcr:primaryType="jnt:file">
-                            <jcr:content jcr:mimeType="image/png" jcr:primaryType="jnt:resource"/>
-                            <thumbnail jcr:mimeType="image/png" jcr:primaryType="jnt:resource"/>
-                            <thumbnail2 jcr:mimeType="image/png" jcr:primaryType="jnt:resource"/>
-                            <community750 jcr:mimeType="image/png" jcr:primaryType="jnt:resource"/>
-                        </next-page.png>
-                        <top_pages_icon.png j:height="16"
-                                   j:width="16"
-                                   jcr:mixinTypes="jmix:image"
-                                   jcr:primaryType="jnt:file">
-                            <jcr:content jcr:mimeType="image/png" jcr:primaryType="jnt:resource"/>
-                            <thumbnail jcr:mimeType="image/png" jcr:primaryType="jnt:resource"/>
-                            <thumbnail2 jcr:mimeType="image/png" jcr:primaryType="jnt:resource"/>
-                            <community750 jcr:mimeType="image/png" jcr:primaryType="jnt:resource"/>
-                        </top_pages_icon.png>
-                    </files>
+                    <files jcr:primaryType="jnt:folder"/>
                     <contents jcr:primaryType="jnt:contentFolder"/>
-                    <server-settings-base j:view="serverSettings"
-                                          jcr:mixinTypes="jmix:useUILocale"
-                                          jcr:primaryType="jnt:template">
-                        <configurations j:hiddenTemplate="false"
-                               j:icon="#/modules/serverSettings/templates/files/serveradmin/configurations/configurations.png"
-                               j:titleKey="serverSettings.configurations"
-                               jcr:mixinTypes="jmix:rbTitle"
-                               jcr:primaryType="jnt:template">
-                            <top-pages-configuration j:applyOn="jnt:globalSettings"
-                                       j:defaultTemplate="false"
-                                       j:hiddenTemplate="false"
-                                       j:icon="#/modules/toppages/templates/files/top_pages_icon.png"
-                                       j:titleKey="toppages.config.title"
-                                       jcr:mixinTypes="jmix:rbTitle"
-                                       jcr:primaryType="jnt:contentTemplate">
-                                <pagecontent jcr:primaryType="jnt:contentList">
-                                    <top-pages-configuration jcr:primaryType="jtopmix:topPagesConfiguration"/>
-                                </pagecontent>
-                            </top-pages-configuration>
-                        </configurations>
-                    </server-settings-base>
                 </templates>
-                
+
             </toppages>
     </modules>
 </content>

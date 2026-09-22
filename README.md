@@ -5,7 +5,7 @@ A Jahia Community module that retrieves the most visited pages from an AWStats
 
 # Requirements
 - Jahia 8.1.0.0 or later (`Jahia-Required-Version` of the built bundle).
-- The modules it depends on: `default`, `bootstrap3-core`, `serverSettings`.
+- The modules it depends on: `default`, `serverSettings`.
 - An AWStats CGI reachable over `http` or `https` **from the Jahia JVM** — not from the
   visitor's browser. See "Outbound requests" for what the module will and will not fetch.
 
