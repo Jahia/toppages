@@ -24,6 +24,11 @@ import org.jahia.modules.graphql.provider.dxm.security.GraphQLRequiresPermission
 @GraphQLDescription("Top Pages queries")
 public class TopPagesQueryExtension {
 
+    private TopPagesQueryExtension() {
+        // The single field below is static: graphql-java-annotations invokes it without an
+        // instance, so this class is never constructed.
+    }
+
     @GraphQLField
     @GraphQLName("topPages")
     @GraphQLNonNull

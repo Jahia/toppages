@@ -59,15 +59,7 @@ public final class TopPagesNodeLister {
                 logger.info("No top pages nodes available to list");
             }
             while (iterator.hasNext()) {
-                JCRNodeWrapper node = (JCRNodeWrapper) iterator.nextNode();
-                // Per node, so that one unreadable row is skipped and logged instead of emptying
-                // the whole table: this is a diagnostic screen, and a diagnostic screen that hides
-                // everything because of a single bad node is worse than useless.
-                try {
-                    allNodes.add(readNode(node));
-                } catch (RepositoryException e) {
-                    logger.warn("Skipping a top pages node that could not be read: {}", node.getPath(), e);
-                }
+                addIfReadable(allNodes, (JCRNodeWrapper) iterator.nextNode());
             }
             // Sort by siteName, tolerating a node whose jahiaSite property was never set.
             Comparator<TopPagesNode> compareBySite =
@@ -80,6 +72,23 @@ public final class TopPagesNodeLister {
         // Always returned, even empty or partial: an absent listing is what made a single failure
         // erase the entire table.
         return allNodes;
+    }
+
+    /**
+     * Append one node to the listing, skipping and logging it when it cannot be read.
+     *
+     * <p>Per node, so that one unreadable row is skipped instead of emptying the whole table: this
+     * is a diagnostic screen, and a diagnostic screen that hides everything because of a single bad
+     * node is worse than useless. The {@code throws} clause exists so that the {@code getPath()}
+     * call in the log statement needs no second handler; it propagates to the caller exactly as it
+     * did inline.
+     */
+    private static void addIfReadable(List<TopPagesNode> rows, JCRNodeWrapper node) throws RepositoryException {
+        try {
+            rows.add(readNode(node));
+        } catch (RepositoryException e) {
+            logger.warn("Skipping a top pages node that could not be read: {}", node.getPath(), e);
+        }
     }
 
     /** Read one {@code jtopmix:topPages} node into the row the listing renders. */

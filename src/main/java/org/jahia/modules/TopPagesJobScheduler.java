@@ -66,8 +66,15 @@ public class TopPagesJobScheduler {
         this.schedulerService = schedulerService;
     }
 
+    /**
+     * DS unbind method. The signature is imposed by Declarative Services -- bnd derives it from
+     * {@code setSchedulerService} by name -- and the parameter is compared rather than ignored so
+     * that a service being replaced cannot clear the reference to its successor.
+     */
     public void unsetSchedulerService(SchedulerService schedulerService) {
-        this.schedulerService = null;
+        if (this.schedulerService == schedulerService) {
+            this.schedulerService = null;
+        }
     }
 
     @Activate

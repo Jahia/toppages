@@ -26,9 +26,9 @@ import java.util.Map;
 public class ChoiceListInitializer implements ModuleChoiceListInitializer {
 
     /** Must match {@code choicelist[sitesConfigInitializer]} in META-INF/definitions.cnd. */
-    private static final String KEY = "sitesConfigInitializer";
+    private static final String DEFAULT_KEY = "sitesConfigInitializer";
 
-    private String key = KEY;
+    private String key = DEFAULT_KEY;
 
     private ConfigurationUtil configurationUtil;
 
@@ -37,8 +37,15 @@ public class ChoiceListInitializer implements ModuleChoiceListInitializer {
         this.configurationUtil = configurationUtil;
     }
 
+    /**
+     * DS unbind method. The signature is imposed by Declarative Services -- bnd derives it from
+     * {@code setConfigurationUtil} by name -- and the parameter is compared rather than ignored so
+     * that a service being replaced cannot clear the reference to its successor.
+     */
     public void unsetConfigurationUtil(ConfigurationUtil configurationUtil) {
-        this.configurationUtil = null;
+        if (this.configurationUtil == configurationUtil) {
+            this.configurationUtil = null;
+        }
     }
 
     @Override

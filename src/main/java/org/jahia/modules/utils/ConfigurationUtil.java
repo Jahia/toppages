@@ -18,15 +18,16 @@ import javax.jcr.PathNotFoundException;
 import javax.jcr.RepositoryException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * The single owner of the module's global report configuration, the {@code jtopmix:siteConfig}
  * nodes under {@code /settings/top-pages}.
  *
  * <p>The class name is historical: it started out read-only, for the rendering code, while the
- * web flow handler kept its own copy of the same JCR access. Both surfaces - and now the GraphQL
- * API - go through this component, so the repository layout, the property names and the
- * invariants below are written down exactly once.
+ * since-deleted Spring Web Flow handler kept its own copy of the same JCR access. The rendering
+ * code and the GraphQL API now both go through this component, so the repository layout, the
+ * property names and the invariants below are written down exactly once.
  *
  * <p>Registered as an OSGi Declarative Services component, replacing the {@code configurationUtil}
  * Spring bean. {@link JCRTemplate} is injected as an OSGi service (Jahia's core Spring bridge
@@ -34,8 +35,7 @@ import java.util.List;
  *
  * <p>The static {@link #getInstance()} accessor exists for the callers that cannot receive an
  * injection: {@code TopPages}, which is instantiated with {@code new} on every code path, the
- * Quartz job, which is instantiated by the scheduler, the web flow handler, which is a flow
- * variable restored from a serialized snapshot, and the GraphQL types, which graphql-java
+ * Quartz job, which is instantiated by the scheduler, and the GraphQL types, which graphql-java
  * instantiates by reflection. It replaces the previous
  * {@code SpringContextSingleton.getBean("configurationUtil")} lookup, which cannot work once the
  * bean no longer exists. It may legitimately read back null while the bundle is stopped, so every
@@ -54,10 +54,12 @@ public class ConfigurationUtil {
     static Logger logger = LoggerFactory.getLogger(ConfigurationUtil.class);
 
     private static final String SETTINGS_NAME = "settings";
-    private static final String SETTINGS_PATH = "/" + SETTINGS_NAME;
     private static final String CONFIG_ROOT_NAME = "top-pages";
     private static final String GLOBAL_SETTINGS_TYPE = "jnt:globalSettings";
     private static final String SITE_CONFIG_TYPE = "jtopmix:siteConfig";
+
+    /** Logged whenever {@link SafeNames#CONFIG_ROOT_PATH} is absent, which is the empty state. */
+    private static final String NO_CONFIG_ROOT = "TopPages: Configuration Node does not exist in JCR";
 
     /** Properties of a {@code jtopmix:siteConfig} node. */
     private static final String P_AWSTATS_URL = "awStatsUrl";
@@ -69,9 +71,9 @@ public class ConfigurationUtil {
     /**
      * Outcome of a write operation.
      *
-     * <p>Deliberately not an exception: both callers - the web flow, which turns it into a
-     * localized form message, and the GraphQL API, which turns it into a typed error - need to
-     * tell the cases apart, and neither of them is an exceptional condition.
+     * <p>Deliberately not an exception: the caller - the GraphQL API, which turns it into a typed
+     * error the admin screen renders - needs to tell the cases apart, and none of them is an
+     * exceptional condition.
      */
     public enum Result {
         /** The configuration was created, updated or removed. */
@@ -86,7 +88,7 @@ public class ConfigurationUtil {
         ERROR
     }
 
-    private static volatile ConfigurationUtil instance;
+    private static final AtomicReference<ConfigurationUtil> INSTANCE = new AtomicReference<>();
 
     private JCRTemplate jcrTemplate;
 
@@ -95,25 +97,34 @@ public class ConfigurationUtil {
         this.jcrTemplate = jcrTemplate;
     }
 
+    /**
+     * DS unbind method. The signature is imposed by Declarative Services -- bnd derives it from
+     * {@code setJcrTemplate} by name -- and the parameter is compared rather than ignored so that a
+     * service being replaced cannot clear the reference to its successor.
+     */
     public void unsetJcrTemplate(JCRTemplate jcrTemplate) {
-        this.jcrTemplate = null;
+        if (this.jcrTemplate == jcrTemplate) {
+            this.jcrTemplate = null;
+        }
     }
 
     @Activate
     public void activate() {
-        instance = this;
+        INSTANCE.set(this);
     }
 
     @Deactivate
     public void deactivate() {
-        instance = null;
+        // Only clear our own registration: on a restart the incoming component activates before
+        // the outgoing one deactivates, and an unconditional clear would erase the new instance.
+        INSTANCE.compareAndSet(this, null);
     }
 
     /**
      * @return the activated component, or null when the module's bundle is not started
      */
     public static ConfigurationUtil getInstance() {
-        return instance;
+        return INSTANCE.get();
     }
 
     public List<String> getSitesConfigList() {
@@ -136,7 +147,7 @@ public class ConfigurationUtil {
                                     configList.add(configNode.getName());
                                 }
                             } catch (PathNotFoundException e) {
-                                logger.debug("TopPages: Configuration Node does not exist in JCR", e);
+                                logger.debug(NO_CONFIG_ROOT, e);
                             }
 
                             return configList;
@@ -174,7 +185,7 @@ public class ConfigurationUtil {
                                     return readConfig(siteNode);
                                 }
                             } catch (PathNotFoundException e) {
-                                logger.debug("TopPages: Configuration Node does not exist in JCR", e);
+                                logger.debug(NO_CONFIG_ROOT, e);
 
                             }
                             return null;
@@ -216,15 +227,10 @@ public class ConfigurationUtil {
                             try {
                                 JCRNodeWrapper configRoot = session.getNode(SafeNames.CONFIG_ROOT_PATH);
                                 for (JCRNodeWrapper configNode : configRoot.getNodes()) {
-                                    try {
-                                        configs.add(readConfig(configNode));
-                                    } catch (RepositoryException e) {
-                                        logger.warn("TopPages: skipping a report configuration that could not be read: {}",
-                                                configNode.getPath(), e);
-                                    }
+                                    addIfReadable(configs, configNode);
                                 }
                             } catch (PathNotFoundException e) {
-                                logger.debug("TopPages: Configuration Node does not exist in JCR", e);
+                                logger.debug(NO_CONFIG_ROOT, e);
                             }
                             return configs;
                         }
@@ -352,8 +358,8 @@ public class ConfigurationUtil {
      *
      * <p>{@link SafeNames#isValidConfigName(String)} already rules out every name the JCR would
      * reject, so the {@code IllegalNameException} branch should now be unreachable; it is kept
-     * because the web flow renders a different message for it and losing that would be a silent
-     * behaviour change.
+     * because it maps to a distinct {@link Result}, and collapsing it into the generic error
+     * would be a silent behaviour change.
      */
     private static Result reportWriteFailure(String operation, RepositoryException e) {
         if (e.getCause() != null && e.getCause().toString().contains("IllegalNameException")) {
@@ -373,11 +379,11 @@ public class ConfigurationUtil {
             return session.getNode(SafeNames.CONFIG_ROOT_PATH);
         } catch (PathNotFoundException e) {//Folders has to be created
             logger.debug("The top pages configuration root does not exist yet, creating it", e);
-            if (session.nodeExists(SETTINGS_PATH)) {
-                return session.getNode(SETTINGS_PATH).addNode(CONFIG_ROOT_NAME, GLOBAL_SETTINGS_TYPE);
-            }
-            return session.getNode("/").addNode(SETTINGS_NAME, GLOBAL_SETTINGS_TYPE)
-                    .addNode(CONFIG_ROOT_NAME, GLOBAL_SETTINGS_TYPE);
+            JCRNodeWrapper root = session.getRootNode();
+            JCRNodeWrapper settings = root.hasNode(SETTINGS_NAME)
+                    ? root.getNode(SETTINGS_NAME)
+                    : root.addNode(SETTINGS_NAME, GLOBAL_SETTINGS_TYPE);
+            return settings.addNode(CONFIG_ROOT_NAME, GLOBAL_SETTINGS_TYPE);
         }
     }
 
@@ -394,6 +400,24 @@ public class ConfigurationUtil {
         } catch (PathNotFoundException e) {
             logger.debug("The top pages configuration root does not exist yet", e);
             return null;
+        }
+    }
+
+    /**
+     * Append one configuration to the listing, skipping and logging it when it cannot be read.
+     *
+     * <p>A configuration that cannot be read is skipped rather than allowed to empty or truncate
+     * the answer -- the same reasoning as the per-node handling in {@code TopPagesNodeLister}. The
+     * {@code throws} clause exists so that the {@code getPath()} call in the log statement needs no
+     * second handler; it propagates to the caller exactly as it did inline.
+     */
+    private static void addIfReadable(List<SiteConfiguration> configs, JCRNodeWrapper configNode)
+            throws RepositoryException {
+        try {
+            configs.add(readConfig(configNode));
+        } catch (RepositoryException e) {
+            logger.warn("TopPages: skipping a report configuration that could not be read: {}",
+                    configNode.getPath(), e);
         }
     }
 
@@ -415,8 +439,8 @@ public class ConfigurationUtil {
      * configuration missing one property reads back as null instead of as a partial value.
      * A null string is written as an empty one rather than passed through, because
      * {@code setProperty(name, null)} <em>removes</em> the property - which is precisely the
-     * partial write this invariant exists to prevent. The web flow binds empty strings from its
-     * form, so only an API caller can reach the null.
+     * partial write this invariant exists to prevent. The admin screen sends empty strings, so only a
+     * direct API caller can reach the null.
      */
     private static void writeConfig(JCRNodeWrapper node, SiteConfiguration site) throws RepositoryException {
         node.setProperty(P_AWSTATS_URL, notNull(site.getReportUrl()));
