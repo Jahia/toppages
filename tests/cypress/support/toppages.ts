@@ -65,8 +65,10 @@ export interface SiteConfig {
     titleSeparator?: string;
 }
 
-const nodeExists = (path: string): Cypress.Chainable<boolean> =>
-    getNodeByPath(path).then((result: {data?: {jcr?: {nodeByPath?: unknown}}}) =>
+type JcrWorkspace = 'EDIT' | 'LIVE';
+
+const nodeExists = (path: string, workspace: JcrWorkspace = 'EDIT'): Cypress.Chainable<boolean> =>
+    getNodeByPath(path, [], LANGUAGE, [], workspace).then((result: {data?: {jcr?: {nodeByPath?: unknown}}}) =>
         Boolean(result?.data?.jcr?.nodeByPath)
     );
 
@@ -138,9 +140,9 @@ export interface TopPagesNodeProps {
 }
 
 /** Create a jtopmix:topPages content node under `parentPath`. */
-export const createTopPagesNode = (parentPath: string, name: string, props: TopPagesNodeProps): void => {
+export const createTopPagesNode = (parentPath: string, name: string, props: TopPagesNodeProps): Cypress.Chainable => {
     removeNodeIfPresent(`${parentPath}/${name}`);
-    addNode({
+    return addNode({
         parentPathOrId: parentPath,
         name,
         primaryNodeType: 'jtopmix:topPages',
@@ -158,6 +160,40 @@ export const createTopPagesNode = (parentPath: string, name: string, props: TopP
         ]
     });
 };
+
+export interface CreatedNode {
+    /** The JCR identifier -- a repository UUID. */
+    uuid: string;
+    /** The name the JCR actually stored, which is not necessarily the one that was asked for. */
+    name: string;
+}
+
+/**
+ * Create a jtopmix:topPages node and yield its identifier together with its stored name.
+ *
+ * Two things a spec cannot know up front and must not guess:
+ *
+ *  - the identifier. `jtopmix_topPages/html/topPages.jsp` derives every dom id from
+ *    `${currentNode.identifier}`, so the selectors a test needs do not exist until the node
+ *    does. A test that rebuilt them from the node name would be testing the vulnerable
+ *    derivation it is supposed to have replaced.
+ *  - the stored name. Jahia is free to rewrite the name it is handed, so a test that asserts
+ *    on the name it ASKED for may be asserting about a node that is not in the repository.
+ *
+ * The addNode mutation answers with both, which makes this the only honest source for either.
+ */
+export const createTopPagesNodeAndRead = (
+    parentPath: string,
+    name: string,
+    props: TopPagesNodeProps
+): Cypress.Chainable =>
+    createTopPagesNode(parentPath, name, props).then(
+        (result: {data?: {jcr?: {addNode?: {uuid?: string; node?: {name?: string}}}}}) => {
+            const created = result?.data?.jcr?.addNode;
+            expect(created?.uuid, `identifier of the created node ${parentPath}/${name}`).to.be.a('string');
+            return {uuid: created.uuid, name: created.node.name};
+        }
+    );
 
 /**
  * Drop every report configuration, so a spec starts from a repository that has never
@@ -192,6 +228,25 @@ export const removeNodeIfPresent = (path: string): void => {
             deleteNode(path);
         }
     });
+};
+
+/**
+ * Remove a node from BOTH workspaces.
+ *
+ * `removeNodeIfPresent` deletes in EDIT only, and a deletion that is never published leaves
+ * the live copy standing. The next run then recreates the same paths with NEW identifiers,
+ * publication will not write them over the live nodes already occupying those paths, and the
+ * live page keeps serving the previous run's markup. Every assertion about the new ids fails
+ * as though the view had stopped rendering, which points at the view instead of at the
+ * leftover -- so any spec that publishes has to clean up both workspaces.
+ */
+export const removeNodeEverywhere = (path: string): void => {
+    nodeExists(path, 'LIVE').then(exists => {
+        if (exists) {
+            deleteNode(path, 'LIVE');
+        }
+    });
+    removeNodeIfPresent(path);
 };
 
 export interface CsrfToken {

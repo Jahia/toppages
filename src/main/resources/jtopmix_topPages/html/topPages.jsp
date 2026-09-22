@@ -22,11 +22,28 @@
 
 <c:set var="getActionUrl" value="${url.base}${currentNode.path}.getTopPages.do"/>
 <c:set var="updateActionUrl" value="${url.base}${currentNode.path}.updateTopPages.do"/>
-<c:set var="parentName" value="${currentNode.parent.name}"/>
-<c:set var="resultDivID" value="result-${currentNode.name}-${parentName}"/>
-<c:set var="messagesDivID" value="messages-${currentNode.name}-${parentName}"/>
-<c:set var="loaderDivID" value="loader-${currentNode.name}-${parentName}"/>
-<c:set var="updateButtonID" value="updateBtn-${currentNode.name}-${parentName}"/>
+<%--
+  Every DOM id below is derived from the node's JCR identifier, never from its name.
+
+  A node name is attacker-influenced content, and these ids reach three different contexts
+  at once: an HTML attribute (id="..."), a JavaScript string literal and a jQuery/CSS
+  selector ($("#...")). Jahia's node-name sanitizer strips `<` and `>` but keeps the double
+  quote, so a node named x");evil=1;a=(" used to close the selector string and have the rest
+  executed as script -- and injected an attribute in the id="..." position at the same time
+  (JAHIA-SEC-411). Escaping cannot fix all three contexts at once: a quote that is correctly
+  escaped for HTML still destroys the selector it lands in.
+
+  An identifier cannot carry that payload: it is a repository UUID, hex digits and hyphens
+  only. The literal prefix stays, both so the id never starts with a digit -- which no CSS
+  selector can address unescaped -- and so the four ids of one component stay distinct; the
+  identifier is what keeps two Top Pages components on the same page from colliding, which
+  is what the node name and its parent's name were combined for.
+--%>
+<c:set var="componentID" value="${currentNode.identifier}"/>
+<c:set var="resultDivID" value="result-${componentID}"/>
+<c:set var="messagesDivID" value="messages-${componentID}"/>
+<c:set var="loaderDivID" value="loader-${componentID}"/>
+<c:set var="updateButtonID" value="updateBtn-${componentID}"/>
 <c:set var="title" value="${currentNode.properties['jcr:title'].string}"/>
 <%-- The CND property is customCSS; ${...properties.customCss...} silently resolved to
      nothing, so a configured class was always ignored in favour of the fallback. --%>

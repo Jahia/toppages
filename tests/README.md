@@ -66,7 +66,7 @@ one was copied from still have that bug.
 | `02-topPagesActions`  | `updateTopPages` / `getTopPages`: report parsing and ranking, `jsonResult` caching, multi-month aggregation, `titleFromHTML`, global-config inheritance, the unreachable-report error path, the admin node listing *including a node that lives outside any page*, the live/anonymous path, the POST-only guard on `updateTopPages` and its refusal of an anonymous caller |
 | `03-editorExperience` | The component's visibility and type label in jContent, asserted as `root` **and** as the editor `mathias` |
 | `04-permissions`      | Who the app shell renders the administration route for, with two administrator positive controls: the route by URL, and the entry an administrator actually clicks under *Server → Configuration* |
-| `05-componentView`    | The component's own view (`jtopmix_topPages/html/topPages.jsp`) rendered in a page: the edit-mode button, the POST it fires and the list the script builds, the `customCSS` class actually being applied, the escaping of a stored title in edit mode **and for an anonymous live visitor**, and the live/anonymous rendering |
+| `05-componentView`    | The component's own view (`jtopmix_topPages/html/topPages.jsp`) rendered in a page: the edit-mode button, the POST it fires and the list the script builds, the `customCSS` class actually being applied, the escaping of a stored title in edit mode **and for an anonymous live visitor**, the live/anonymous rendering, and a node whose **name** is the JAHIA-SEC-411 breakout payload, served to an anonymous visitor |
 | `06-graphqlApi`       | The GraphQL API over the report configurations: the schema shape (exactly one field on the root `Query` and one on the root `Mutation`), the CRUD round trip, the five properties on the created node, the refusal of an unsafe name and of a duplicate, and the authorization matrix for `root` / `mathias` / anonymous. The diagnostic `contentNodes` field is driven through the UI instead, in `02-topPagesActions` |
 
 ## Things that will bite you
@@ -110,6 +110,25 @@ Each of these cost real debugging time; all of them fail in a way that points so
 - **Specs clear `/settings/top-pages` in `before()`** and delete what they created in
   `after()`, so any spec can be run on its own and an interrupted run cannot poison the
   next one.
+- **The view's dom ids come from `${currentNode.identifier}`, not from the node name.** A
+  node name is attacker-influenced and the ids land in three contexts at once -- an
+  `id="..."` attribute, a JavaScript string literal and a jQuery selector `$("#...")`.
+  Jahia's node-name sanitizer strips `<` and `>` but keeps the double quote, so a node named
+  `x");evil=1;a=("` used to close the selector string and have the rest executed
+  (JAHIA-SEC-411). A spec therefore cannot build a selector from the node name it asked for:
+  `createTopPagesNodeAndRead()` yields the identifier, and the name the JCR actually stored,
+  which is not necessarily the one requested.
+- **Deleting a node deletes it in EDIT only.** `removeNodeIfPresent()` leaves the published
+  copy standing, so the next run recreates the same paths with NEW identifiers, publication
+  will not write them over the live nodes already there, and the live page keeps serving the
+  previous run's markup. Every assertion about the new ids then fails as though the view had
+  stopped rendering. Any spec that publishes cleans up with `removeNodeEverywhere()`.
+- **Publication lands asynchronously and a live page is cached per visitor.**
+  `publishAndWaitJobEnding()` can return before the last child is live; the anonymous read
+  that follows caches that incomplete page, and a second publish with nothing left to do does
+  not flush it. A test that fetches a live page as a guest retries the read until a value it
+  knows must be there shows up, and asserts on that body.
+
 - **A `"><img …>` payload cannot prove the escaping of this view.** Every stored value the
   view carries — `jcr:title`, `jsonResult`, `lastErrorReceived` — used to be interpolated
   *inside* a `<script>` block, where that payload is inert text and a probe using it
