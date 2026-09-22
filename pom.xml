@@ -65,9 +65,27 @@
   </scm>
   <properties>
     <jahia-depends>default,bootstrap3-core,serverSettings</jahia-depends>
+    <!--
+      NOT for dependency injection: every bean is an OSGi Declarative Services component and
+      META-INF/spring/toppages.xml declares none. Spring Web Flow is the only reason this is still
+      here: WebflowDispatcherScript resolves the flow executor through
+      JahiaTemplatesPackage.getContext(), which is null unless the Spring extender built a context
+      for the module, and the server-settings page then answers 500. Goes away with the webflow.
+    -->
     <require-capability>osgi.extender;filter:="(osgi.extender=org.jahia.bundles.blueprint.extender.config)"</require-capability>
   </properties>
   <dependencies>
+    <!--
+      Compile-time only: the OSGi Declarative Services annotations have CLASS retention and are
+      read by bnd at package time to generate OSGI-INF/*.xml and the Service-Component header.
+      provided scope keeps them out of Embed-Dependency and out of the bundle.
+    -->
+    <dependency>
+      <groupId>org.osgi</groupId>
+      <artifactId>org.osgi.service.component.annotations</artifactId>
+      <version>1.3.0</version>
+      <scope>provided</scope>
+    </dependency>
     <dependency>
       <groupId>org.jsoup</groupId>
       <artifactId>jsoup</artifactId>
@@ -100,7 +118,10 @@
         <artifactId>maven-bundle-plugin</artifactId>
         <extensions>true</extensions>
         <configuration>
-          <instructions />
+          <instructions>
+            <!-- Scan every class for DS annotations and emit OSGI-INF/*.xml + Service-Component. -->
+            <_dsannotations>*</_dsannotations>
+          </instructions>
         </configuration>
       </plugin>
       <plugin>

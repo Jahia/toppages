@@ -70,8 +70,13 @@ than an empty one.
 
 ## Scheduled update
 A Quartz job re-reads every `jtopmix:topPages` node in the `live` and `default`
-workspaces. Its trigger is declared as `${topPagesCronExp:0 0 0 ? * 1 *}` — midnight on
-Sunday by default — and can be overridden through a `topPagesCronExp` property.
+workspaces. Its cron trigger is `0 0 0 ? * 1 *` — midnight on Sunday — and is overridden
+through the `topPagesCronExp` key of the OSGi configuration `org.jahia.modules.toppages`.
+The module ships a documented default at
+`src/main/resources/META-INF/configurations/org.jahia.modules.toppages.cfg`, deployed to
+`karaf/etc/org.jahia.modules.toppages.cfg`; editing that file reschedules the job without a
+restart. An invalid expression is logged and leaves the job unscheduled, it does not stop
+the module.
 
 # Permissions
 

@@ -3,11 +3,11 @@ package org.jahia.modules;
 import org.jahia.services.content.JCRNodeWrapper;
 import org.jahia.services.content.JCRSessionFactory;
 import org.jahia.services.content.JCRSessionWrapper;
+import org.quartz.Job;
 import org.quartz.JobExecutionContext;
 import org.quartz.JobExecutionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.scheduling.quartz.QuartzJobBean;
 
 import javax.jcr.NodeIterator;
 import javax.jcr.RepositoryException;
@@ -15,15 +15,22 @@ import javax.jcr.query.Query;
 import java.util.Locale;
 
 /**
- * A Quartz job to update the top pages
+ * A Quartz job to update the top pages.
+ *
+ * <p>Instantiated by the scheduler, not by the OSGi runtime, so it gets nothing injected: it
+ * reaches the module's configuration through {@code ConfigurationUtil.getInstance()} inside
+ * {@link TopPages#updateTopPages}. {@link TopPagesJobScheduler} is what registers it.
+ *
+ * <p>Implements {@link Job} directly. It used to extend Spring's {@code QuartzJobBean}, whose only
+ * added behaviour is bean-style injection from the job data map, which this job does not use.
  */
-public class UpdateTopPagesJob extends QuartzJobBean {
+public class UpdateTopPagesJob implements Job {
 
     Logger logger = LoggerFactory.getLogger(UpdateTopPagesJob.class);
     TopPages topPages;
 
     @Override
-    protected void executeInternal(JobExecutionContext context) throws JobExecutionException {
+    public void execute(JobExecutionContext context) throws JobExecutionException {
         topPages = new TopPages();
         //update all top pages in live and default workspaces
         updateWorkspace("live");

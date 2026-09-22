@@ -5,6 +5,10 @@ import org.jahia.services.content.JCRCallback;
 import org.jahia.services.content.JCRNodeWrapper;
 import org.jahia.services.content.JCRSessionWrapper;
 import org.jahia.services.content.JCRTemplate;
+import org.osgi.service.component.annotations.Activate;
+import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.Deactivate;
+import org.osgi.service.component.annotations.Reference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -14,23 +18,52 @@ import javax.jcr.RepositoryException;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Reads the module's global report configuration from {@code /settings/top-pages}.
+ *
+ * <p>Registered as an OSGi Declarative Services component, replacing the {@code configurationUtil}
+ * Spring bean. {@link JCRTemplate} is injected as an OSGi service (Jahia's core Spring bridge
+ * publishes it), so the component only activates once the repository is available.
+ *
+ * <p>The static {@link #getInstance()} accessor exists for the two callers that cannot receive an
+ * injection: {@code TopPages}, which is instantiated with {@code new} on every code path, and the
+ * Quartz job, which is instantiated by the scheduler. It replaces the previous
+ * {@code SpringContextSingleton.getBean("configurationUtil")} lookup, which cannot work once the
+ * bean no longer exists. It may legitimately read back null while the bundle is stopped, so every
+ * caller has to handle that.
+ */
+@Component(service = ConfigurationUtil.class, immediate = true)
 public class ConfigurationUtil {
     static Logger logger = LoggerFactory.getLogger(ConfigurationUtil.class);
-    private String key;
 
-    public void setKey(String key) {
-        this.key = key;
-    }
-
-    public String getKey() {
-        return key;
-    }
-
+    private static volatile ConfigurationUtil instance;
 
     private JCRTemplate jcrTemplate;
 
+    @Reference
     public void setJcrTemplate(JCRTemplate jcrTemplate) {
         this.jcrTemplate = jcrTemplate;
+    }
+
+    public void unsetJcrTemplate(JCRTemplate jcrTemplate) {
+        this.jcrTemplate = null;
+    }
+
+    @Activate
+    public void activate() {
+        instance = this;
+    }
+
+    @Deactivate
+    public void deactivate() {
+        instance = null;
+    }
+
+    /**
+     * @return the activated component, or null when the module's bundle is not started
+     */
+    public static ConfigurationUtil getInstance() {
+        return instance;
     }
 
     public List<String> getSitesConfigList() {

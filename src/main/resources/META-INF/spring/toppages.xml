@@ -1,74 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+  This file declares NO beans, and must not be used to declare any: every bean this module used
+  to define is now an OSGi Declarative Services component under src/main/java, registered through
+  the annotations on those classes and described by the generated OSGI-INF/*.xml.
+
+  It exists only so that the module still gets a Spring application context. Spring Web Flow needs
+  one: org.jahia.services.render.webflow.WebflowDispatcherScript.execute() resolves the flow
+  executor with JahiaTemplatesPackage.getContext().getBean(...), and getContext() is null for a
+  module the Spring extender never built a context for. Without this file (and without the
+  matching osgi.extender require-capability in pom.xml) the server-settings page at
+  Administration > Server > Configuration > Top Pages answers HTTP 500 with a NullPointerException
+  and the flow never renders.
+
+  The webflow at jtopmix_topPagesConfiguration/html/topPagesConfiguration.flow/ is scheduled to be
+  replaced; this file and the require-capability go with it.
+-->
 <beans xmlns="http://www.springframework.org/schema/beans"
        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
        xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-3.0.xsd">
-
-
-    <!--
-      updateTopPages rewrites the node (jsonResult, lastErrorReceived and, when overrideConfig
-      is false, the five configuration properties) and makes the server fetch a remote report,
-      so read access to the node is not enough: the caller must be allowed to write it.
-
-      jcr:write is deliberate. hasPermission() resolves the name through privilegeFromName(),
-      which answers an unknown name with an AccessControlException that JCRNodeWrapperImpl maps
-      to false, so a typo here locks out every caller, root included. jcr:write is a core
-      privilege registered on this platform and is workspace-resolved, so an editor keeps the
-      button in edit mode while the live workspace stays closed to a reader.
-    -->
-    <bean class="org.jahia.modules.actions.UpdateTopPagesAction">
-        <property name="name" value="updateTopPages"/>
-        <property name="requiredPermission" value="jcr:write"/>
-    </bean>
-    <bean class="org.jahia.modules.actions.GetTopPagesAction">
-        <property name="name" value="getTopPages"/>
-        <property name="requireAuthenticatedUser" value="false" />
-    </bean>
-
-<!-- Initializer -->
-    <bean id="sitesConfigInitializer" class="org.jahia.modules.ChoiceListInitializer">
-        <property name="key" value="sitesConfigInitializer"/>
-        <property name="configurationUtil" ref="configurationUtil"/>
-    </bean>
- <!-- End initilizer -->
-
-
-    <bean id="configurationUtil" class="org.jahia.modules.utils.ConfigurationUtil">
-        <property name="key" value="configurationUtil"/>
-        <property name="jcrTemplate" ref="jcrTemplate"/>
-    </bean>
-
-    <bean id="topPages" class="org.jahia.modules.TopPages">
-        <property name="configurationUtil" ref="configurationUtil"/>
-    </bean>
-
-    <bean class="org.jahia.services.content.rules.ModuleGlobalObject">
-        <property name="globalRulesObject">
-            <map>
-                <entry key="topPagesService">
-                    <bean class="org.jahia.modules.TopPagesService">
-                    </bean>
-                </entry>
-            </map>
-        </property>
-    </bean>
-
-
-    <bean parent="jobSchedulingBean">
-        <property name="ramJob" value="false"/>
-        <property name="trigger">
-            <bean class="org.quartz.CronTrigger">
-                <property name="name" value="ReferentielJobTrigger"/>
-                <property name="cronExpression" value="${topPagesCronExp:0 0 0 ? * 1 *}"/>
-            </bean>
-        </property>
-        <property name="jobDetail">
-            <bean class="org.springframework.scheduling.quartz.JobDetailBean">
-                <property name="name" value="Top Pages"/>
-                <property name="group" value="Jahia Top Pages module"/>
-                <property name="jobClass" value="org.jahia.modules.UpdateTopPagesJob"/>
-                <property name="description" value="Update top pages"/>
-            </bean>
-        </property>
-    </bean>
-
 </beans>

@@ -9,7 +9,6 @@ import org.jahia.modules.utils.ConfigurationUtil;
 import org.jahia.modules.utils.HttpClientUtil;
 import org.jahia.modules.utils.SafeText;
 import org.jahia.modules.utils.SafeUrls;
-import org.jahia.services.SpringContextSingleton;
 import org.jahia.services.content.JCRNodeWrapper;
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -304,8 +303,19 @@ public class TopPages {
             boolean titleFromHtml = node.getProperty(P_TITLEFROMHTML).getBoolean();
             String titleSeparator = node.getPropertyAsString(P_TITLESEPARATOR);
 
+            // TopPages is instantiated with new on every path -- the two actions, the Drools
+            // service and the scheduled job -- so it is never injected. ConfigurationUtil is an
+            // OSGi Declarative Services component and hands out its activated instance; this
+            // replaces the SpringContextSingleton.getBean("configurationUtil") lookup, which
+            // cannot resolve a bean that no longer exists.
             if (configurationUtil == null) {
-                configurationUtil = (ConfigurationUtil) SpringContextSingleton.getBean("configurationUtil");
+                configurationUtil = ConfigurationUtil.getInstance();
+            }
+            if (configurationUtil == null) {
+                // Only reachable while the module's bundle is not started.
+                logger.error("Unable to update the top pages for node {}: the configuration service is not available",
+                        node.getPath());
+                return;
             }
 
             SiteConfiguration siteConfig = configurationUtil.getSiteConfig(reportName);
