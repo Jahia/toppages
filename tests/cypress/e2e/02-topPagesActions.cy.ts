@@ -259,7 +259,7 @@ describe('Top Pages actions', () => {
 
     it('refuses an anonymous updateTopPages', () => {
         // Reading the cached result is public by design; rewriting it is not.
-        // UpdateTopPagesAction leaves requireAuthenticatedUser at its default of true.
+        // updateTopPages requires the jcr:write permission on the node, which guest does not hold.
         cy.logout();
         callAction(nodePath, 'updateTopPages', {workspace: 'live', failOnStatusCode: false})
             .its('status')

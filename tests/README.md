@@ -45,23 +45,28 @@ container.
 ```bash
 cd tests
 yarn                       # fetch JS deps on the host
-./ci.startup.sh notests    # boot Jahia + awstats WITHOUT running the specs
-./env.run.sh               # provision the environment and run the suite headless once
 source set-env.sh          # REQUIRED, and again in every new terminal
+./ci.startup.sh notests    # boot jahia + awstats WITHOUT running the specs
+./env.run.sh               # provision the environment and run the suite headless once
 yarn run e2e:debug         # interactive runner (yarn e2e:ci for headless)
 ```
 
 `baseUrl` is `http://localhost:8080`; the Jahia JPDA debug port is `8000`.
+
+`ci.startup.sh` forwards `"$@"` to the upstream CLI, which is what makes `notests` work:
+the CLI branches on `if [[ "$1" != "notests" ]]`, so a wrapper that swallows its arguments
+boots the stack *and* runs the suite anyway, with no warning. The sibling harnesses this
+one was copied from still have that bug.
 
 ## The specs
 
 | Spec                  | Covers                                                                              |
 |-----------------------|-------------------------------------------------------------------------------------|
 | `01-serverSettings`   | The webflow at *Administration → Server → Configuration → Top Pages*: create, validate, list, edit, rename, reject duplicates, delete — each verified in the UI *and* under `/settings/top-pages` |
-| `02-topPagesActions`  | `updateTopPages` / `getTopPages`: report parsing and ranking, `jsonResult` caching, multi-month aggregation, `titleFromHTML`, global-config inheritance, the unreachable-report error path, the admin node listing, the live/anonymous path, the POST-only guard on `updateTopPages`, plus one `KNOWN DEFECT` characterization test |
+| `02-topPagesActions`  | `updateTopPages` / `getTopPages`: report parsing and ranking, `jsonResult` caching, multi-month aggregation, `titleFromHTML`, global-config inheritance, the unreachable-report error path, the admin node listing, the live/anonymous path, the POST-only guard on `updateTopPages` and its refusal of an anonymous caller, plus one `KNOWN DEFECT` characterization test |
 | `03-editorExperience` | The component's visibility and type label in jContent, asserted as `root` **and** as the editor `mathias` |
 | `04-permissions`      | Who may open the server-settings page, with an administrator positive control       |
-| `05-componentView`    | The component's own view (`jtopmix_topPages/html/topPages.jsp`) rendered in a page: the edit-mode button, the POST it fires and the list the script builds, the escaping of a stored title, and the live/anonymous rendering |
+| `05-componentView`    | The component's own view (`jtopmix_topPages/html/topPages.jsp`) rendered in a page: the edit-mode button, the POST it fires and the list the script builds, the `customCSS` class actually being applied, the escaping of a stored title, and the live/anonymous rendering |
 
 ## Things that will bite you
 
@@ -103,7 +108,7 @@ Each of these cost real debugging time; all of them fail in a way that points so
   `mathias` (editor, password `password`, shipped by Digitall's `users.zip`).
 - **Specs clear `/settings/top-pages` in `before()`** and delete what they created in
   `after()`, so any spec can be run on its own and an interrupted run cannot poison the
-  next one. This matters more than usual here — see the second known defect below.
+  next one. This matters more than usual here — see the known defect below.
 
 ## Known defects the suite records
 

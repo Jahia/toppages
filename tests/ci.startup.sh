@@ -13,4 +13,6 @@ echo " SUPER_USER_PASSWORD: ${SUPER_USER_PASSWORD}"
 
 version=$(node -p "require('./package.json').devDependencies['@jahia/cypress']")
 echo Using @jahia/cypress@$version...
-npx --yes --package @jahia/cypress@$version ci.startup
+# "$@" matters: the CLI branches on `if [[ "$1" != "notests" ]]`, so without it
+# `./ci.startup.sh notests` silently boots the stack AND runs the suite.
+npx --yes --package @jahia/cypress@$version ci.startup "$@"
