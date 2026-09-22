@@ -37,6 +37,42 @@ back inside a `try` that swallows `PathNotFoundException`, so a configuration no
 any other means with a property missing reads back as `null` and every update against it is
 silently skipped.
 
+# GraphQL API
+
+The same configurations can be maintained over `POST /modules/graphql`, under a single
+namespaced field on each root type — `Query.topPages` and `Mutation.topPages`. Nothing is
+added flat to the root: two modules declaring the same root field make `DXGraphQLProvider`
+fail with a duplicate-field error that takes down the whole schema, not just this module's
+part of it.
+
+```graphql
+query {
+  topPages {
+    reportConfigurations { name awStatsUrl includeFilter excludeFilter titleFromHTML titleSeparator }
+    reportConfiguration(name: "my-report") { name awStatsUrl }
+  }
+}
+
+mutation {
+  topPages {
+    createReportConfiguration(name: "my-report", awStatsUrl: "https://stats.example.com/awstats.pl") { name }
+    updateReportConfiguration(name: "my-report", newName: "renamed", includeFilter: "/en/") { name }
+    deleteReportConfiguration(name: "renamed")
+  }
+}
+```
+
+`createReportConfiguration` takes `name` and `awStatsUrl`; the other four are optional and
+default to empty / false, and all five properties are written either way.
+`updateReportConfiguration` leaves out arguments alone rather than clearing them, so a caller
+changing one field does not erase the rest. A refused write — an unsafe name, a duplicate, a
+configuration that is not there — comes back as a GraphQL error classified
+`TopPagesConfigurationException`, never as a quiet no-op.
+
+Every field requires the `administrationAccess` permission, the same server-scope permission
+that gates the administration page. It has to: these writes run under a system session, which
+bypasses the access manager, so without the check the API would be a way around that page.
+
 # The Top Pages component (`jtopmix:topPages`)
 
 | Property | Default | Meaning |
@@ -85,6 +121,7 @@ the module.
 | `getTopPages.do` | nothing; it is served to anonymous visitors |
 | `updateTopPages.do` | `jcr:write` on the node, and POST: `org.jahia.bin.Action` defaults `requiredMethods` to `["POST"]`, so a GET is answered with 405 |
 | Administration page | the `admin` permission |
+| `Query.topPages` / `Mutation.topPages` | the `administrationAccess` permission on `/`, checked against the *caller's* session |
 
 # Outbound requests
 Every request the module makes — the report itself, and with `titleFromHTML` each page

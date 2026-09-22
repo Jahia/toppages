@@ -4,16 +4,13 @@ import org.apache.commons.lang.StringUtils;
 import org.jahia.modules.models.SiteConfiguration;
 import org.jahia.modules.models.TopPagesConfigModel;
 import org.jahia.modules.models.TopPagesNode;
-import org.jahia.modules.utils.SafeNames;
+import org.jahia.modules.utils.ConfigurationUtil;
 import org.jahia.services.content.*;
 import org.slf4j.Logger;
 import org.springframework.binding.message.MessageContext;
-import org.springframework.binding.message.MessageResolver;
 import org.springframework.webflow.execution.RequestContext;
 
-import javax.jcr.ItemExistsException;
 import javax.jcr.NodeIterator;
-import javax.jcr.PathNotFoundException;
 import javax.jcr.RepositoryException;
 import javax.jcr.query.Query;
 import java.io.Serializable;
@@ -24,26 +21,24 @@ import java.util.List;
 
 import static org.slf4j.LoggerFactory.getLogger;
 
+/**
+ * Backs the server-settings web flow at
+ * <em>Administration &gt; Server &gt; Configuration &gt; Top Pages</em>.
+ *
+ * <p>It owns no repository access of its own any more: every read and write of
+ * {@code /settings/top-pages} goes through {@link ConfigurationUtil}, which the GraphQL API uses
+ * as well, so the name validation, the "write all five properties" rule and the duplicate
+ * handling exist once instead of once per surface. What is left here is web flow glue: turning a
+ * {@link ConfigurationUtil.Result} into a localized form message, and the diagnostic listing of
+ * the {@code jtopmix:topPages} nodes, which is rendered by this page only.
+ */
 public class SiteconfigFlowHandler implements Serializable {
 
     private static final Logger logger = getLogger(SiteconfigFlowHandler.class);
 
-    private static final String SETTINGS_NAME = "settings";
-    private static final String SETTINGS_PATH = "/" + SETTINGS_NAME;
-    private static final String CONFIG_ROOT_NAME = "top-pages";
-    private static final String GLOBAL_SETTINGS_TYPE = "jnt:globalSettings";
-    private static final String SITE_CONFIG_TYPE = "jtopmix:siteConfig";
-
     /** Node types the upward walk for an enclosing page recognises, and the one it stops at. */
     private static final String PAGE_TYPE = "jnt:page";
     private static final String SITE_TYPE = "jnt:virtualsite";
-
-    /** Properties of a {@code jtopmix:siteConfig} node. */
-    private static final String P_AWSTATS_URL = "awStatsUrl";
-    private static final String P_INCLUDE_FILTER = "includeFilter";
-    private static final String P_EXCLUDE_FILTER = "excludeFilter";
-    private static final String P_TITLE_FROM_HTML = "titleFromHTML";
-    private static final String P_TITLE_SEPARATOR = "titleSeparator";
 
     /** Web flow message sources; the JSPs render the errors bound to these. */
     private static final String SRC_SAVE_ERROR = "saveError";
@@ -54,24 +49,16 @@ public class SiteconfigFlowHandler implements Serializable {
     private static final String SAVE_ERROR_KEY = "toppages.form.error.saveError";
     private static final String ALREADY_EXISTS_KEY = "toppages.form.error.alreadyExist";
 
-    private transient JCRTemplate jcrTemplate;
-
     TopPagesConfigModel model;
-
-    public void setJcrTemplate(JCRTemplate jcrTemplate) {
-        this.jcrTemplate = jcrTemplate;
-    }
 
     /**
      * The handler is a web flow variable, not a Spring bean: it is instantiated per flow execution
      * and its state is serialized into the flow snapshot, which leaves an injected field null on
-     * every restore. The template is therefore resolved on demand rather than injected once.
+     * every restore. The service is therefore resolved on demand rather than injected once, and
+     * may legitimately be absent while the module's bundle is stopped.
      */
-    private JCRTemplate getJcrTemplate() {
-        if (jcrTemplate == null) {
-            jcrTemplate = JCRTemplate.getInstance();
-        }
-        return jcrTemplate;
+    private static ConfigurationUtil getConfigurationService() {
+        return ConfigurationUtil.getInstance();
     }
 
     public TopPagesConfigModel init() {
@@ -79,34 +66,24 @@ public class SiteconfigFlowHandler implements Serializable {
             logger.debug("Getting the configurations list");
         }
 
-        try {
-            this.model = getJcrTemplate().doExecuteWithSystemSession(
-                    new JCRCallback<TopPagesConfigModel>() {
-                        @Override
-                        public TopPagesConfigModel doInJCR(JCRSessionWrapper session) throws RepositoryException {
-                            TopPagesConfigModel sitesModel = new TopPagesConfigModel();
-                            sitesModel.setSelectedSiteName("");
-                            //Getting filter Sites nodes
-                            JCRNodeWrapper sitesNode = getOrCreateConfigRoot(session);
+        TopPagesConfigModel sitesModel = new TopPagesConfigModel();
+        sitesModel.setSelectedSiteName("");
 
-                            for (JCRNodeWrapper site : sitesNode.getNodes()) {
-                                sitesModel.addSiteConfig(readConfig(site));
-                            }
-                            session.save();
-
-                            if (logger.isDebugEnabled()) {
-                                logger.debug("End of Retreiving top pages sites configuratoins");
-                            }
-
-                            return sitesModel;
-                        }
-                    }
-            );
-
-        } catch (RepositoryException e) {
-            logger.error("Top pages: Unable to find an existing sites configuration", e);
-            return new TopPagesConfigModel();
+        ConfigurationUtil service = getConfigurationService();
+        if (service == null) {
+            logger.error("Top pages: the configuration service is not available");
+            this.model = sitesModel;
+            return this.model;
         }
+
+        // Opening the settings page is what brings /settings/top-pages into existence on a
+        // repository that has never been configured; the listing itself never writes.
+        service.ensureConfigRoot();
+        for (SiteConfiguration config : service.getSiteConfigs()) {
+            sitesModel.addSiteConfig(config);
+        }
+
+        this.model = sitesModel;
         return this.model;
     }
 
@@ -116,102 +93,34 @@ public class SiteconfigFlowHandler implements Serializable {
             logger.debug("Saving new Site configuration: {}", site);
         }
 
-        final String siteName = site.getSiteName();
-        if (!SafeNames.isValidConfigName(siteName)) {
-            messageContext.addMessage(site.getMessage(SRC_SAVE_ERROR, ILLEGAL_NAME_KEY));
-            logger.warn("Refused a report configuration name that is not a single safe path segment");
+        ConfigurationUtil service = getConfigurationService();
+        if (service == null) {
+            messageContext.addMessage(site.getMessage(SRC_SAVE_ERROR, SAVE_ERROR_KEY));
+            logger.error("Top pages: the configuration service is not available");
             return false;
         }
 
-        boolean created = true;
-        final MessageResolver itemAlreadyExistsMessage = site.getMessage(SRC_SAVE_ERROR, ALREADY_EXISTS_KEY);
-        try {
-
-            MessageResolver creationResult = getJcrTemplate().doExecuteWithSystemSession(
-                    new JCRCallback<MessageResolver>() {
-                        @Override
-                        public MessageResolver doInJCR(JCRSessionWrapper session) throws RepositoryException {
-                            return createConfigNode(session, siteName, site) ? null : itemAlreadyExistsMessage;
-                        }
-                    }
-            );
-
-            if (creationResult != null) {//Name already exists
-                messageContext.addMessage(creationResult);
-                created = false;
-            }
-
-        } catch (RepositoryException e) {//Any other node creation Issue
-            if (isIllegalName(e)) {
-                messageContext.addMessage(this.model.getMessage(SRC_SAVE_ERROR, ILLEGAL_NAME_KEY));
-                logger.error("Failed to create top Pages site configuration node, Illegal Name found", e);
-
-            } else {
-                messageContext.addMessage(this.model.getMessage(SRC_SAVE_ERROR, SAVE_ERROR_KEY));
-                logger.error("Failed to create top Pages site configuration node", e);
-
-            }
-        }
-
-        return created;
-
-    }
-
-    /**
-     * Add a configuration node under the configuration root and write its properties.
-     *
-     * @param siteName a name already checked with {@link SafeNames#isValidConfigName(String)}
-     * @return false when a configuration already exists under that name, true otherwise
-     */
-    private static boolean createConfigNode(JCRSessionWrapper session, String siteName, SiteConfiguration site)
-            throws RepositoryException {
-        JCRNodeWrapper configRoot = getOrCreateConfigRoot(session);
-        boolean jcrOk = true;
-        try {
-            writeConfig(configRoot.addNode(siteName, SITE_CONFIG_TYPE), site);
-        } catch (ItemExistsException e) {
-            jcrOk = false;
-            logger.warn("A site with the same name already exists", e);
-        }
-        session.save();
-        return jcrOk;
+        return reportResult(service.createSiteConfig(site), site, messageContext, SRC_SAVE_ERROR);
     }
 
     public SiteConfiguration setSelectedConfiguration(TopPagesConfigModel model) {
         if (logger.isDebugEnabled()) {
             logger.debug(" Setting the selected site: {}", model.getSelectedSiteName());
         }
-        final String selectedSiteName = model.getSelectedSiteName();
-        if (!SafeNames.isValidConfigName(selectedSiteName)) {
-            logger.warn("Refused a selected configuration name that is not a single safe path segment");
+
+        ConfigurationUtil service = getConfigurationService();
+        if (service == null) {
+            logger.error("Top pages: the configuration service is not available");
             return null;
         }
-        try {
-            return getJcrTemplate().doExecuteWithSystemSession(
-                    new JCRCallback<SiteConfiguration>() {
-                        @Override
-                        public SiteConfiguration doInJCR(JCRSessionWrapper session) throws RepositoryException {
-                            JCRNodeWrapper siteNode = findConfigNode(session, selectedSiteName);
-                            if (siteNode == null) {
-                                logger.debug("Unable to get the selected configuration: {}", selectedSiteName);
-                                return null;
-                            }
-                            SiteConfiguration config = readConfig(siteNode);
-                            config.setToBeUpdated(true);
 
-                            if (logger.isDebugEnabled()) {
-                                logger.debug("End of Retreiving top pages sites configurations");
-                            }
-                            return config;
-                        }
-                    }
-            );
-        } catch (RepositoryException e) {
-            logger.error("Failed to set the selected site", e);
-
+        SiteConfiguration config = service.getSiteConfig(model.getSelectedSiteName());
+        if (config == null) {
+            logger.debug("Unable to get the selected configuration: {}", model.getSelectedSiteName());
+            return null;
         }
-        return null;
-
+        config.setToBeUpdated(true);
+        return config;
     }
 
     public boolean deleteSiteConfiguration() {
@@ -219,34 +128,15 @@ public class SiteconfigFlowHandler implements Serializable {
             return false;
         }
 
-        final String selectedSiteName = model.getSelectedSiteName();
-        if (!SafeNames.isValidConfigName(selectedSiteName)) {
-            logger.warn("Refused a delete for a configuration name that is not a single safe path segment");
+        ConfigurationUtil service = getConfigurationService();
+        if (service == null) {
+            logger.error("Top pages: the configuration service is not available");
             return false;
         }
 
-        try {
-            getJcrTemplate().doExecuteWithSystemSession(
-                    new JCRCallback<Boolean>() {
-                        @Override
-                        public Boolean doInJCR(JCRSessionWrapper session) throws RepositoryException {
-                            JCRNodeWrapper siteNode = findConfigNode(session, selectedSiteName);
-                            if (siteNode == null) {
-                                logger.debug("Error while deleting the site: {}, site not found", selectedSiteName);
-                                return false;
-                            }
-                            siteNode.remove();
-                            session.save();
-                            return true;
-                        }
-                    }
-            );
-        } catch (RepositoryException e) {
-            logger.error("Top-pages - Failed to delete site configuration", e);
-
-        }
-
-        return true;
+        // A configuration that is already gone still counts as deleted for the page: the listing
+        // is rebuilt from the repository on the way back, so it shows the truth either way.
+        return service.deleteSiteConfig(model.getSelectedSiteName()) != ConfigurationUtil.Result.INVALID_NAME;
     }
 
 
@@ -255,63 +145,37 @@ public class SiteconfigFlowHandler implements Serializable {
             logger.debug("Saving new Site configuration: {}", siteConfig);
         }
 
-        final String siteToUpdate = this.model.getSelectedSiteName();
-        final String siteName = siteConfig.getSiteName();
-        if (!SafeNames.isValidConfigName(siteToUpdate) || !SafeNames.isValidConfigName(siteName)) {
-            messageContext.addMessage(siteConfig.getMessage(SRC_CONFIG_UPDATE, ILLEGAL_NAME_KEY));
-            logger.warn("Refused an update for a configuration name that is not a single safe path segment");
+        ConfigurationUtil service = getConfigurationService();
+        if (service == null) {
+            messageContext.addMessage(siteConfig.getMessage(SRC_CONFIG_UPDATE, SAVE_ERROR_KEY));
+            logger.error("Top pages: the configuration service is not available");
             return false;
         }
 
-        boolean updated = true;
+        ConfigurationUtil.Result result = service.updateSiteConfig(this.model.getSelectedSiteName(), siteConfig);
+        return reportResult(result, siteConfig, messageContext, SRC_CONFIG_UPDATE);
+    }
 
-        try {
-
-            MessageResolver updateResult = getJcrTemplate().doExecuteWithSystemSession(
-                    new JCRCallback<MessageResolver>() {
-                        @Override
-                        public MessageResolver doInJCR(JCRSessionWrapper session) throws RepositoryException {
-                            JCRNodeWrapper topPagesSite = findConfigNode(session, siteToUpdate);
-                            if (topPagesSite == null) {
-                                logger.warn("Unable to update the configuration {}, it no longer exists", siteToUpdate);
-                                return siteConfig.getMessage(SRC_CONFIG_UPDATE, SAVE_ERROR_KEY);
-                            }
-                            try {
-                                if (!siteToUpdate.equals(siteName)) { // Updated Name
-                                    topPagesSite.rename(siteName);
-                                }
-                                writeConfig(topPagesSite, siteConfig);
-
-                                session.save();
-                            } catch (ItemExistsException e) {
-                                logger.warn("Unable to update site configuration, a site configuration with the same name already exists", e);
-                                return siteConfig.getMessage(SRC_CONFIG_UPDATE, ALREADY_EXISTS_KEY);
-                            }
-                            return null;
-                        }
-                    }
-
-            );
-
-            if (updateResult != null) {
-                updated = false;
-                messageContext.addMessage(updateResult);
-            }
-
-        } catch (RepositoryException e) {//Any other node creation Issue
-            if (isIllegalName(e)) {
-                messageContext.addMessage(siteConfig.getMessage(SRC_CONFIG_UPDATE, ILLEGAL_NAME_KEY));
-                logger.error("Failed to update top Pages site configuration node", e);
-
-            } else {
-                messageContext.addMessage(siteConfig.getMessage(SRC_CONFIG_UPDATE, SAVE_ERROR_KEY));
-                logger.error("Failed to updated top Pages site configuration node", e);
-
-            }
+    /**
+     * Bind the error message the JSP renders for a failed write.
+     *
+     * @return true when the write succeeded and the flow may move on
+     */
+    private static boolean reportResult(ConfigurationUtil.Result result, SiteConfiguration site,
+                                        MessageContext messageContext, String source) {
+        switch (result) {
+            case OK:
+                return true;
+            case INVALID_NAME:
+                messageContext.addMessage(site.getMessage(source, ILLEGAL_NAME_KEY));
+                return false;
+            case DUPLICATE:
+                messageContext.addMessage(site.getMessage(source, ALREADY_EXISTS_KEY));
+                return false;
+            default:
+                messageContext.addMessage(site.getMessage(source, SAVE_ERROR_KEY));
+                return false;
         }
-
-        return updated;
-
     }
 
     public SiteConfiguration newSiteConfiguration() {
@@ -355,62 +219,6 @@ public class SiteconfigFlowHandler implements Serializable {
         // made a single failure erase the entire table.
         context.getFlowScope().put("allNodes", allNodes);
 
-    }
-
-    /**
-     * Return the configuration root, creating it - and the {@code /settings} node it hangs from -
-     * when it is not there yet.
-     */
-    private static JCRNodeWrapper getOrCreateConfigRoot(JCRSessionWrapper session) throws RepositoryException {
-        try {
-            return session.getNode(SafeNames.CONFIG_ROOT_PATH);
-        } catch (PathNotFoundException e) {//Folders has to be created
-            logger.debug("The top pages configuration root does not exist yet, creating it", e);
-            if (session.nodeExists(SETTINGS_PATH)) {
-                return session.getNode(SETTINGS_PATH).addNode(CONFIG_ROOT_NAME, GLOBAL_SETTINGS_TYPE);
-            }
-            return session.getNode("/").addNode(SETTINGS_NAME, GLOBAL_SETTINGS_TYPE)
-                    .addNode(CONFIG_ROOT_NAME, GLOBAL_SETTINGS_TYPE);
-        }
-    }
-
-    /**
-     * Resolve a configuration node by name, without ever concatenating the name into a path.
-     *
-     * @param name a name already checked with {@link SafeNames#isValidConfigName(String)}
-     * @return the node, or null when there is no configuration under that name
-     */
-    private static JCRNodeWrapper findConfigNode(JCRSessionWrapper session, String name) throws RepositoryException {
-        try {
-            JCRNodeWrapper configRoot = session.getNode(SafeNames.CONFIG_ROOT_PATH);
-            return configRoot.hasNode(name) ? configRoot.getNode(name) : null;
-        } catch (PathNotFoundException e) {
-            logger.debug("The top pages configuration root does not exist yet", e);
-            return null;
-        }
-    }
-
-    /** Read a {@code jtopmix:siteConfig} node into the form model. */
-    private static SiteConfiguration readConfig(JCRNodeWrapper node) throws RepositoryException {
-        return new SiteConfiguration(node.getName(),
-                node.getProperty(P_AWSTATS_URL).getString(),
-                node.getProperty(P_INCLUDE_FILTER).getString(),
-                node.getPropertyAsString(P_EXCLUDE_FILTER),
-                node.getProperty(P_TITLE_FROM_HTML).getBoolean(),
-                node.getPropertyAsString(P_TITLE_SEPARATOR));
-    }
-
-    /** Write the form model onto a {@code jtopmix:siteConfig} node. */
-    private static void writeConfig(JCRNodeWrapper node, SiteConfiguration site) throws RepositoryException {
-        node.setProperty(P_AWSTATS_URL, site.getReportUrl());
-        node.setProperty(P_INCLUDE_FILTER, site.getIncludeFilter());
-        node.setProperty(P_EXCLUDE_FILTER, site.getExcludeFilter());
-        node.setProperty(P_TITLE_FROM_HTML, site.isTitleFromHTML());
-        node.setProperty(P_TITLE_SEPARATOR, site.getTitleSeparator());
-    }
-
-    private static boolean isIllegalName(RepositoryException e) {
-        return e.getCause() != null && e.getCause().toString().contains("IllegalNameException");
     }
 
     /** Read one {@code jtopmix:topPages} node into the row the listing renders. */

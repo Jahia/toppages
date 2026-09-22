@@ -67,6 +67,7 @@ one was copied from still have that bug.
 | `03-editorExperience` | The component's visibility and type label in jContent, asserted as `root` **and** as the editor `mathias` |
 | `04-permissions`      | Who may open the server-settings page, with an administrator positive control       |
 | `05-componentView`    | The component's own view (`jtopmix_topPages/html/topPages.jsp`) rendered in a page: the edit-mode button, the POST it fires and the list the script builds, the `customCSS` class actually being applied, the escaping of a stored title in edit mode **and for an anonymous live visitor**, and the live/anonymous rendering |
+| `06-graphqlApi`       | The GraphQL API over the report configurations: the schema shape (exactly one field on the root `Query` and one on the root `Mutation`), the CRUD round trip, the five properties on the created node, the refusal of an unsafe name and of a duplicate, and the authorization matrix for `root` / `mathias` / anonymous |
 
 ## Things that will bite you
 
@@ -118,6 +119,22 @@ Each of these cost real debugging time; all of them fail in a way that points so
   response as well as on the parsed DOM. The `jcr:title` carrier reaches **any anonymous
   visitor** on an ordinary live page; only `lastErrorReceived` is administrator-only,
   because the JSP keeps it inside `<c:if test="${renderContext.editMode}">`.
+
+- **`cy.apolloClient()` cannot be anonymous.** With neither a token nor a username it falls
+  back to `Basic root:$SUPER_USER_PASSWORD`, so an "anonymous" apollo client is quietly `root`
+  and every negative assertion passes for the wrong reason. A genuinely unauthenticated GraphQL
+  call has to be a raw `cy.request()` after `cy.logout()`.
+- **A GraphQL call needs an `Origin` header when it is not made by the page.** Jahia's API
+  security filter auto-applies the `hosted` scope to same-origin calls; without the header the
+  endpoint answers `GqlAccessDeniedException: Permission denied` on `Query.jcr` for *root*,
+  which reads as a broken account rather than a missing header. `cy.apollo` gets this for free
+  from the browser; a hand-rolled `cy.request` does not.
+- **`cy.apollo` does not fail a test on a GraphQL error.** It catches the `ApolloError` and
+  yields it, so `result.data` is `undefined` and the errors are under `result.graphQLErrors`.
+  A negative test that expects a throw asserts nothing at all.
+- **graphql-java refuses "bad faith" introspection.** Selecting `__Type.fields` more than once
+  in one document - which asking for `__schema { queryType { fields } mutationType { fields } }`
+  does - is rejected with `BadFaithIntrospection`, not answered. Ask for one root type per query.
 
 ## Known gap
 

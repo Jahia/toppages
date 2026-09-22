@@ -16,7 +16,16 @@ public final class SafeNames {
     /** Where the module keeps its global configuration, one child per AWStats report. */
     public static final String CONFIG_ROOT_PATH = "/settings/top-pages";
 
-    private static final Pattern SAFE_NODE_NAME = Pattern.compile("[A-Za-z0-9._-]{1,100}");
+    /**
+     * The rule a configuration name has to satisfy, as text.
+     *
+     * <p>Public because the GraphQL API quotes it back to a caller whose name was refused: the
+     * rule is not a secret, and an error that does not say what was expected only produces
+     * another wrong request.
+     */
+    public static final String SAFE_NAME_PATTERN = "[A-Za-z0-9._-]{1,100}";
+
+    private static final Pattern SAFE_NODE_NAME = Pattern.compile(SAFE_NAME_PATTERN);
 
     private SafeNames() {
         // utility class
