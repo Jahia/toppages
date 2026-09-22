@@ -151,7 +151,10 @@ describe('Server settings - AWStats report configuration', () => {
         cy.login();
         readProperty(`${SETTINGS_ROOT}/${reportName}`, 'awStatsUrl').should('eq', AWSTATS_REPORT_URL);
         listChildren(SETTINGS_ROOT).then((children: ChildNode[]) => {
-            expect(children.filter(c => c.name === reportName), 'configurations with that name').to.have.length(1);
+            expect(
+                children.filter(c => c.name === reportName),
+                'configurations with that name'
+            ).to.have.length(1);
         });
     });
 

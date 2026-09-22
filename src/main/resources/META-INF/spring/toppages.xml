@@ -4,8 +4,20 @@
        xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-3.0.xsd">
 
 
+    <!--
+      updateTopPages rewrites the node (jsonResult, lastErrorReceived and, when overrideConfig
+      is false, the five configuration properties) and makes the server fetch a remote report,
+      so read access to the node is not enough: the caller must be allowed to write it.
+
+      jcr:write is deliberate. hasPermission() resolves the name through privilegeFromName(),
+      which answers an unknown name with an AccessControlException that JCRNodeWrapperImpl maps
+      to false, so a typo here locks out every caller, root included. jcr:write is a core
+      privilege registered on this platform and is workspace-resolved, so an editor keeps the
+      button in edit mode while the live workspace stays closed to a reader.
+    -->
     <bean class="org.jahia.modules.actions.UpdateTopPagesAction">
         <property name="name" value="updateTopPages"/>
+        <property name="requiredPermission" value="jcr:write"/>
     </bean>
     <bean class="org.jahia.modules.actions.GetTopPagesAction">
         <property name="name" value="getTopPages"/>
@@ -26,7 +38,6 @@
     </bean>
 
     <bean id="topPages" class="org.jahia.modules.TopPages">
-        <property name="key" value="topPages"/>
         <property name="configurationUtil" ref="configurationUtil"/>
     </bean>
 

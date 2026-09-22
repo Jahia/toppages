@@ -7,7 +7,6 @@ import org.jahia.services.content.JCRSessionWrapper;
 import org.jahia.services.content.JCRTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 
 import javax.jcr.NodeIterator;
 import javax.jcr.PathNotFoundException;
@@ -28,7 +27,6 @@ public class ConfigurationUtil {
     }
 
 
-    @Autowired
     private JCRTemplate jcrTemplate;
 
     public void setJcrTemplate(JCRTemplate jcrTemplate) {
@@ -37,17 +35,17 @@ public class ConfigurationUtil {
 
     public List<String> getSitesConfigList() {
 
-        ArrayList<String> result = null;
+        List<String> result = null;
         try {
-            result = (ArrayList<String>) jcrTemplate.doExecuteWithSystemSession(
-                    new JCRCallback() {
+            result = jcrTemplate.doExecuteWithSystemSession(
+                    new JCRCallback<List<String>>() {
                         @Override
                         public List<String> doInJCR(JCRSessionWrapper session) throws RepositoryException {
                             JCRNodeWrapper sitesNode = null;
                             ArrayList<String> configList = new ArrayList<>();
                             //Getting filter Sites nodes
                             try {
-                                sitesNode = session.getNode("/settings/top-pages/");
+                                sitesNode = session.getNode(SafeNames.CONFIG_ROOT_PATH);
                                 NodeIterator iterator = sitesNode.getNodes();
                                 while (iterator.hasNext()) {
                                     JCRNodeWrapper configNode = (JCRNodeWrapper) iterator.nextNode();
@@ -73,18 +71,24 @@ public class ConfigurationUtil {
 
     public SiteConfiguration getSiteConfig(final String siteName) {
 
+        // The name reaches this method from a content property, and the lookup below runs under a
+        // system session: it must be proven to be a single safe path segment before it is used.
+        if (!SafeNames.isValidConfigName(siteName)) {
+            logger.warn("TopPages: refusing an invalid report configuration name");
+            return null;
+        }
+
         SiteConfiguration result = null;
         try {
-            result = (SiteConfiguration) jcrTemplate.doExecuteWithSystemSession(
-                    new JCRCallback() {
+            result = jcrTemplate.doExecuteWithSystemSession(
+                    new JCRCallback<SiteConfiguration>() {
                         @Override
                         public SiteConfiguration doInJCR(JCRSessionWrapper session) throws RepositoryException {
-                            JCRNodeWrapper siteNode = null;
-
                             //Getting filter Sites nodes
                             try {
-                                siteNode = session.getNode("/settings/top-pages/" + siteName);
-                                if (siteNode != null) {
+                                JCRNodeWrapper configRoot = session.getNode(SafeNames.CONFIG_ROOT_PATH);
+                                if (configRoot.hasNode(siteName)) {
+                                    JCRNodeWrapper siteNode = configRoot.getNode(siteName);
                                     return new SiteConfiguration(siteNode.getName(), siteNode.getProperty("awStatsUrl").getString(), siteNode.getProperty("includeFilter").getString(),
                                             siteNode.getPropertyAsString("excludeFilter"), siteNode.getProperty("titleFromHTML").getBoolean(), siteNode.getPropertyAsString("titleSeparator"));
                                 }

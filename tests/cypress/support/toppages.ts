@@ -157,8 +157,9 @@ export const clearAllSiteConfigs = (): void => {
 export const listChildren = (path: string): Cypress.Chainable =>
     cy
         .apollo({queryFile: 'graphql/query/getChildNodes.graphql', variables: {path}})
-        .then((result: {data?: {jcr?: {nodeByPath?: {children?: {nodes?: ChildNode[]}}}}}) =>
-            result?.data?.jcr?.nodeByPath?.children?.nodes ?? []
+        .then(
+            (result: {data?: {jcr?: {nodeByPath?: {children?: {nodes?: ChildNode[]}}}}}) =>
+                result?.data?.jcr?.nodeByPath?.children?.nodes ?? []
         );
 
 export interface ChildNode {
@@ -195,13 +196,11 @@ export interface CsrfToken {
 // Loose return type: cy.then() picks its JQuery overload for an object subject, so a
 // precise Chainable<CsrfToken> annotation does not type-check. Callers annotate instead.
 export const getCsrfToken = (): Cypress.Chainable =>
-    cy
-        .request({url: '/modules/CsrfServlet', log: false})
-        .then((response: Cypress.Response<string>) => {
-            const match = /='([A-Z0-9_]+)',\s*\w+='([A-Z0-9]{4}(?:-[A-Z0-9]{4})+)'/.exec(response.body);
-            expect(match, 'CSRF token in the CsrfServlet response').to.not.be.a('null');
-            return {name: match[1], value: match[2]};
-        });
+    cy.request({url: '/modules/CsrfServlet', log: false}).then((response: Cypress.Response<string>) => {
+        const match = /='([A-Z0-9_]+)',\s*\w+='([A-Z0-9]{4}(?:-[A-Z0-9]{4})+)'/.exec(response.body);
+        expect(match, 'CSRF token in the CsrfServlet response').to.not.be.a('null');
+        return {name: match[1], value: match[2]};
+    });
 
 export type Workspace = 'default' | 'live';
 
@@ -215,8 +214,8 @@ export interface ActionOptions extends Partial<Cypress.RequestOptions> {
  * Three things are all required, and each fails in a way that looks like something else:
  *
  *  - POST. org.jahia.bin.Action defaults requiredMethods to ["POST"] and neither action
- *    overrides it, so a GET is 405. (The module's own topPages.jsp uses $.getJSON, i.e.
- *    a GET -- see the regression test in 02-topPagesActions.cy.ts.)
+ *    overrides it, so a GET is 405 -- which is the point, since updateTopPages rewrites
+ *    content. See the regression test in 02-topPagesActions.cy.ts.
  *  - The CSRF token. Jahia's CSRF Guard protects /cms/render/**.do for every method and
  *    answers a tokenless call with a 302 to /error.html, which surfaces as a misleading
  *    "400 Unknown locale".
@@ -252,5 +251,7 @@ export const readProperty = (path: string, property: string): Cypress.Chainable<
     );
 
 /** Parse the `jsonResult` property the module persists after an update. */
-export const readJsonResult = (path: string): Cypress.Chainable<{topPages: Array<{title: string; href: string; count: number}>} | null> =>
+export const readJsonResult = (
+    path: string
+): Cypress.Chainable<{topPages: Array<{title: string; href: string; count: number}>} | null> =>
     readProperty(path, 'jsonResult').then(value => (value ? JSON.parse(value) : null));

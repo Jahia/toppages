@@ -17,9 +17,23 @@ global JCRContentUtils jcrUtils
 global TopPages topPages
 global TopPagesService topPagesService
 
+// A single pattern, deliberately: the previous version chained one
+// "A property <name> has been set on a node" condition per property with ||, and the
+// Drools DSL expander folds a "- ..." constraint line into ONE pattern only. Every other
+// alternative was therefore unconstrained, so the rule also fired for jtopmix:siteConfig
+// nodes under /settings/top-pages -- which carry includeFilter, excludeFilter,
+// titleFromHTML and titleSeparator too, but none of the jtopmix:topPages properties
+// TopPages.updateTopPages() reads. Every configuration save produced four
+// PathNotFoundException stack traces in jahia.log.
+//
+// With the generic "A property has been set on a node" condition both the property-name
+// filter and the node-type filter land on the same pattern, so they always apply together.
+// The name filter is what keeps the rule from re-entering on jsonResult / lastErrorReceived,
+// which the consequence itself writes.
 rule "update top pages"
     when
-        A property numberOfResults has been set on a node ||  A property nMonths has been set on a node || A property customCSS has been set on a node || A property overrideConfig has been set on a node || A property jahiaSite has been set on a node || A property includeFilter has been set on a node || A property excludeFilter has been set on a node || A property titleFromHTML has been set on a node || A property titleSeparator has been set on a node
+        A property has been set on a node
+            - it is a top pages configuration property
             - the node has the type jtopmix:topPages
     then
         Log "TopPages: Configuration changed, the node: " + node.getPath() + " is being updated by a rule"

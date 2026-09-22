@@ -25,14 +25,40 @@
 <c:set var="sitesConfigList" value="${topPagesModel.siteConfigList}"/>
 <template:addResources>
     <script type="text/javascript">
-        function selectedRow(siteName, del) {
-            document.getElementById("selectedSiteName").value = siteName;
-            if (del === true) {
-                if (confirm("Are you sure you want to delete the config for: " + siteName + "?")) {
+        // Delegated instead of an inline onClick, so no configuration name is ever
+        // interpolated into a JavaScript string literal. The handler runs while the click
+        // bubbles, i.e. before the form is submitted, which is what the delete flow needs.
+        // Plain DOM on purpose: this script must not depend on jQuery having loaded first.
+        (function () {
+            function onRowButtonClick(event) {
+                var button = event.target;
+                while (button && button !== event.currentTarget && !button.getAttribute("data-site-name")) {
+                    button = button.parentElement;
+                }
+                if (!button || !button.getAttribute("data-site-name")) {
+                    return;
+                }
+                var siteName = button.getAttribute("data-site-name");
+                document.getElementById("selectedSiteName").value = siteName;
+                if (button.getAttribute("data-confirm-delete") === "true" &&
+                    window.confirm("Are you sure you want to delete the config for: " + siteName + "?")) {
                     document.getElementById("confirmDelete").value = "delete";
                 }
             }
-        }
+
+            function bind() {
+                var form = document.getElementById("topPagesForm");
+                if (form) {
+                    form.addEventListener("click", onRowButtonClick);
+                }
+            }
+
+            if (document.readyState === "loading") {
+                document.addEventListener("DOMContentLoaded", bind);
+            } else {
+                bind();
+            }
+        })();
     </script>
 </template:addResources>
 
@@ -74,19 +100,20 @@
                                 </thead>
                                 <c:forEach items="${sitesConfigList}" var="site" varStatus="keys">
                                     <tr>
-                                        <td>${site.siteName}</td>
-                                        <td>${site.reportUrl}</td>
-                                        <td>${site.includeFilter}</td>
-                                        <td>${site.excludeFilter}</td>
+                                        <td>${fn:escapeXml(site.siteName)}</td>
+                                        <td>${fn:escapeXml(site.reportUrl)}</td>
+                                        <td>${fn:escapeXml(site.includeFilter)}</td>
+                                        <td>${fn:escapeXml(site.excludeFilter)}</td>
                                         <td>${site.titleFromHTML}</td>
-                                        <td>${site.titleSeparator}</td>
+                                        <td>${fn:escapeXml(site.titleSeparator)}</td>
                                         <td>
                                             <button id="editSiteConfig" class="fa fa-pencil" type="submit"
-                                                    onClick="selectedRow('${site.siteName}')"
+                                                    data-site-name="${fn:escapeXml(site.siteName)}"
                                                     name="_eventId_editSiteConfig">
                                             </button>
                                             <button id="deleteSiteConfig" class="fa fa-trash" type="submit"
-                                                    onClick="selectedRow('${site.siteName}',true)"
+                                                    data-site-name="${fn:escapeXml(site.siteName)}"
+                                                    data-confirm-delete="true"
                                                     name="_eventId_deleteSiteConfig">
                                             </button>
                                         </td>
@@ -128,9 +155,9 @@
                                     </thead>
                                     <c:forEach items="${allNodes}" var="node">
                                         <tr>
-                                            <td> ${node.jahiaSite} </td>
-                                            <td> ${node.name} </td>
-                                            <td> ${node.path}</td>
+                                            <td> ${fn:escapeXml(node.jahiaSite)} </td>
+                                            <td> ${fn:escapeXml(node.name)} </td>
+                                            <td> ${fn:escapeXml(node.path)}</td>
                                             <td>
                                                 <c:choose>
                                                     <c:when test="${empty node.lastPublished}">
@@ -144,7 +171,7 @@
                                             <td>
                                                 <c:url value="${url.server}/cms/edit/default/${node.defaultLanguage}/${node.parentPage}.html"
                                                        var="editUrl"/>
-                                                <a href="${editUrl}" target="_blank"> View Page </a></td>
+                                                <a href="${fn:escapeXml(editUrl)}" target="_blank"> View Page </a></td>
                                         </tr>
                                     </c:forEach>
                                 </table>

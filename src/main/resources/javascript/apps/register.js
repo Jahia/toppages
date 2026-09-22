@@ -3,7 +3,7 @@
 
         window.jahia.uiExtender.registry.add('adminRoute', 'top-pages-configuration', {
                 targets: ['administration-server-configuration:88'],
-                // requiredPermission: 'admin',
+                requiredPermission: 'admin',
                 icon: null,
                 label: 'Top Pages Configuration',
                 isSelectable: true,

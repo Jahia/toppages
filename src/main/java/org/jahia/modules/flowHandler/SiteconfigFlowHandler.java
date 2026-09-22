@@ -4,9 +4,9 @@ import org.apache.commons.lang.StringUtils;
 import org.jahia.modules.models.SiteConfiguration;
 import org.jahia.modules.models.TopPagesConfigModel;
 import org.jahia.modules.models.TopPagesNode;
+import org.jahia.modules.utils.SafeNames;
 import org.jahia.services.content.*;
 import org.slf4j.Logger;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.binding.message.MessageContext;
 import org.springframework.binding.message.MessageResolver;
 import org.springframework.webflow.execution.RequestContext;
@@ -28,14 +28,47 @@ public class SiteconfigFlowHandler implements Serializable {
 
     private static final Logger logger = getLogger(SiteconfigFlowHandler.class);
 
+    private static final String SETTINGS_NAME = "settings";
+    private static final String SETTINGS_PATH = "/" + SETTINGS_NAME;
+    private static final String CONFIG_ROOT_NAME = "top-pages";
+    private static final String GLOBAL_SETTINGS_TYPE = "jnt:globalSettings";
+    private static final String SITE_CONFIG_TYPE = "jtopmix:siteConfig";
+
+    /** Properties of a {@code jtopmix:siteConfig} node. */
+    private static final String P_AWSTATS_URL = "awStatsUrl";
+    private static final String P_INCLUDE_FILTER = "includeFilter";
+    private static final String P_EXCLUDE_FILTER = "excludeFilter";
+    private static final String P_TITLE_FROM_HTML = "titleFromHTML";
+    private static final String P_TITLE_SEPARATOR = "titleSeparator";
+
+    /** Web flow message sources; the JSPs render the errors bound to these. */
+    private static final String SRC_SAVE_ERROR = "saveError";
+    private static final String SRC_CONFIG_UPDATE = "configUpdate";
+
+    /** Resource bundle keys. */
+    private static final String ILLEGAL_NAME_KEY = "toppages.form.error.IllegaleName";
+    private static final String SAVE_ERROR_KEY = "toppages.form.error.saveError";
+    private static final String ALREADY_EXISTS_KEY = "toppages.form.error.alreadyExist";
+
+    private transient JCRTemplate jcrTemplate;
+
+    TopPagesConfigModel model;
+
     public void setJcrTemplate(JCRTemplate jcrTemplate) {
         this.jcrTemplate = jcrTemplate;
     }
 
-    @Autowired
-    private transient JCRTemplate jcrTemplate;
-
-    TopPagesConfigModel model;
+    /**
+     * The handler is a web flow variable, not a Spring bean: it is instantiated per flow execution
+     * and its state is serialized into the flow snapshot, which leaves an injected field null on
+     * every restore. The template is therefore resolved on demand rather than injected once.
+     */
+    private JCRTemplate getJcrTemplate() {
+        if (jcrTemplate == null) {
+            jcrTemplate = JCRTemplate.getInstance();
+        }
+        return jcrTemplate;
+    }
 
     public TopPagesConfigModel init() {
         if (logger.isDebugEnabled()) {
@@ -43,27 +76,17 @@ public class SiteconfigFlowHandler implements Serializable {
         }
 
         try {
-            this.model = jcrTemplate.doExecuteWithSystemSession(
+            this.model = getJcrTemplate().doExecuteWithSystemSession(
                     new JCRCallback<TopPagesConfigModel>() {
                         @Override
                         public TopPagesConfigModel doInJCR(JCRSessionWrapper session) throws RepositoryException {
-                            JCRNodeWrapper sitesNode;
                             TopPagesConfigModel sitesModel = new TopPagesConfigModel();
                             sitesModel.setSelectedSiteName("");
                             //Getting filter Sites nodes
-                            try {
-                                sitesNode = session.getNode("/settings/top-pages/");
-                            } catch (PathNotFoundException e) {//Folders has to be created
-                                if (session.nodeExists("/settings")) {
-                                    sitesNode = session.getNode("/settings").addNode("top-pages", "jnt:globalSettings");
-                                } else {
-                                    sitesNode = session.getNode("/").addNode("settings", "jnt:globalSettings").addNode("top-pages", "jnt:globalSettings");
-                                }
-                            }
+                            JCRNodeWrapper sitesNode = getOrCreateConfigRoot(session);
 
                             for (JCRNodeWrapper site : sitesNode.getNodes()) {
-                                sitesModel.addSiteConfig(new SiteConfiguration(site.getName(), site.getProperty("awStatsUrl").getString(), site.getProperty("includeFilter").getString(), site.getPropertyAsString("excludeFilter"),site.getProperty("titleFromHTML").getBoolean(),site.getPropertyAsString("titleSeparator")));
-
+                                sitesModel.addSiteConfig(readConfig(site));
                             }
                             session.save();
 
@@ -89,55 +112,22 @@ public class SiteconfigFlowHandler implements Serializable {
             logger.debug("Saving new Site configuration: {}", site);
         }
 
-        boolean created = true;
         final String siteName = site.getSiteName();
-        final String url = site.getReportUrl();
-        final String includeFilter = site.getIncludeFilter();
-        final String excludeFilter = site.getExcludeFilter();
-        final boolean titleFromHTML = site.isTitleFromHTML();
-        final String titleSeparator = site.getTitleSeparator();
-        final MessageResolver itemAlreadyExistsMessage = site.getMessage("saveError", "toppages.form.error.alreadyExist");
+        if (!SafeNames.isValidConfigName(siteName)) {
+            messageContext.addMessage(site.getMessage(SRC_SAVE_ERROR, ILLEGAL_NAME_KEY));
+            logger.warn("Refused a report configuration name that is not a single safe path segment");
+            return false;
+        }
+
+        boolean created = true;
+        final MessageResolver itemAlreadyExistsMessage = site.getMessage(SRC_SAVE_ERROR, ALREADY_EXISTS_KEY);
         try {
 
-            MessageResolver creationResult = jcrTemplate.doExecuteWithSystemSession(
+            MessageResolver creationResult = getJcrTemplate().doExecuteWithSystemSession(
                     new JCRCallback<MessageResolver>() {
                         @Override
                         public MessageResolver doInJCR(JCRSessionWrapper session) throws RepositoryException {
-                            JCRNodeWrapper topPagesConfigNode = null;
-                            JCRNodeWrapper topPagesSite = null;
-                            boolean jcrOk = true;
-                            try {
-
-                                topPagesConfigNode = session.getNode("/settings/top-pages/");
-
-                            } catch (PathNotFoundException e) {
-                                //path does not exist, need to create it, check if parent nodes exists too for first time creation
-                                if (session.nodeExists("/settings/")) {
-                                    topPagesConfigNode = session.getNode("/settings/").addNode("top-pages", "jnt:globalSettings");
-
-                                } else {
-                                    topPagesConfigNode = session.getNode("/").addNode("settings", "jnt:globalSettings").addNode("top-pages", "jnt:globalSettings").addNode(siteName, "jtopmix:siteConfig");
-                                }
-                            }
-                            try {
-                                if (topPagesConfigNode != null) {
-                                    topPagesSite = topPagesConfigNode.addNode(siteName, "jtopmix:siteConfig");
-
-                                    if (topPagesSite != null) {
-                                        topPagesSite.setProperty("awStatsUrl", url);
-                                        topPagesSite.setProperty("includeFilter", includeFilter);
-                                        topPagesSite.setProperty("excludeFilter", excludeFilter);
-                                        topPagesSite.setProperty("titleFromHTML", titleFromHTML);
-                                        topPagesSite.setProperty("titleSeparator", titleSeparator);
-                                    }
-                                }
-                            } catch (ItemExistsException e) {
-                                jcrOk = false;
-                                logger.warn("A site with the same name already exists");
-                            }
-                            session.save();
-                            return jcrOk ? null : itemAlreadyExistsMessage;
-
+                            return createConfigNode(session, siteName, site) ? null : itemAlreadyExistsMessage;
                         }
                     }
             );
@@ -148,12 +138,12 @@ public class SiteconfigFlowHandler implements Serializable {
             }
 
         } catch (RepositoryException e) {//Any other node creation Issue
-            if (e.getCause().toString().contains("IllegalNameException")) {
-                messageContext.addMessage(this.model.getMessage("saveError", "toppages.form.error.IllegaleName"));
+            if (isIllegalName(e)) {
+                messageContext.addMessage(this.model.getMessage(SRC_SAVE_ERROR, ILLEGAL_NAME_KEY));
                 logger.error("Failed to create top Pages site configuration node, Illegal Name found", e);
 
             } else {
-                messageContext.addMessage(this.model.getMessage("saveError", "toppages.form.error.saveError"));
+                messageContext.addMessage(this.model.getMessage(SRC_SAVE_ERROR, SAVE_ERROR_KEY));
                 logger.error("Failed to create top Pages site configuration node", e);
 
             }
@@ -163,25 +153,46 @@ public class SiteconfigFlowHandler implements Serializable {
 
     }
 
+    /**
+     * Add a configuration node under the configuration root and write its properties.
+     *
+     * @param siteName a name already checked with {@link SafeNames#isValidConfigName(String)}
+     * @return false when a configuration already exists under that name, true otherwise
+     */
+    private static boolean createConfigNode(JCRSessionWrapper session, String siteName, SiteConfiguration site)
+            throws RepositoryException {
+        JCRNodeWrapper configRoot = getOrCreateConfigRoot(session);
+        boolean jcrOk = true;
+        try {
+            writeConfig(configRoot.addNode(siteName, SITE_CONFIG_TYPE), site);
+        } catch (ItemExistsException e) {
+            jcrOk = false;
+            logger.warn("A site with the same name already exists", e);
+        }
+        session.save();
+        return jcrOk;
+    }
+
     public SiteConfiguration setSelectedConfiguration(TopPagesConfigModel model) {
         if (logger.isDebugEnabled()) {
             logger.debug(" Setting the selected site: {}", model.getSelectedSiteName());
         }
         final String selectedSiteName = model.getSelectedSiteName();
+        if (!SafeNames.isValidConfigName(selectedSiteName)) {
+            logger.warn("Refused a selected configuration name that is not a single safe path segment");
+            return null;
+        }
         try {
-            return jcrTemplate.doExecuteWithSystemSession(
+            return getJcrTemplate().doExecuteWithSystemSession(
                     new JCRCallback<SiteConfiguration>() {
                         @Override
                         public SiteConfiguration doInJCR(JCRSessionWrapper session) throws RepositoryException {
-                            JCRNodeWrapper siteNode = null;
-                            //Getting filter Sites nodes
-                            try {
-                                siteNode = session.getNode("/settings/top-pages/" + selectedSiteName);
-                            } catch (PathNotFoundException e) {
-                                logger.debug("Unable to get the selected configuration!", e);
+                            JCRNodeWrapper siteNode = findConfigNode(session, selectedSiteName);
+                            if (siteNode == null) {
+                                logger.debug("Unable to get the selected configuration: {}", selectedSiteName);
                                 return null;
                             }
-                            SiteConfiguration config = new SiteConfiguration(siteNode.getName(), siteNode.getProperty("awStatsUrl").getString(), siteNode.getProperty("includeFilter").getString(), siteNode.getPropertyAsString("excludeFilter"),siteNode.getProperty("titleFromHTML").getBoolean(),siteNode.getPropertyAsString("titleSeparator"));
+                            SiteConfiguration config = readConfig(siteNode);
                             config.setToBeUpdated(true);
 
                             if (logger.isDebugEnabled()) {
@@ -205,22 +216,23 @@ public class SiteconfigFlowHandler implements Serializable {
         }
 
         final String selectedSiteName = model.getSelectedSiteName();
+        if (!SafeNames.isValidConfigName(selectedSiteName)) {
+            logger.warn("Refused a delete for a configuration name that is not a single safe path segment");
+            return false;
+        }
 
         try {
-            jcrTemplate.doExecuteWithSystemSession(
-                    new JCRCallback() {
+            getJcrTemplate().doExecuteWithSystemSession(
+                    new JCRCallback<Boolean>() {
                         @Override
                         public Boolean doInJCR(JCRSessionWrapper session) throws RepositoryException {
-                            JCRNodeWrapper siteNode = null;
-                            //Getting filter Sites nodes
-                            try {
-                                siteNode = session.getNode("/settings/top-pages/" + selectedSiteName);
-                                siteNode.remove();
-                                session.save();
-                            } catch (PathNotFoundException e) {
-                                logger.debug("Error while deleting the site:" + selectedSiteName + ", site not found", e);
+                            JCRNodeWrapper siteNode = findConfigNode(session, selectedSiteName);
+                            if (siteNode == null) {
+                                logger.debug("Error while deleting the site: {}, site not found", selectedSiteName);
                                 return false;
                             }
+                            siteNode.remove();
+                            session.save();
                             return true;
                         }
                     }
@@ -236,41 +248,40 @@ public class SiteconfigFlowHandler implements Serializable {
 
     public boolean updateSiteConfiguration(final SiteConfiguration siteConfig, MessageContext messageContext) {
         if (logger.isDebugEnabled()) {
-            logger.debug("Saving new Site configuration: {}",siteConfig.toString());
+            logger.debug("Saving new Site configuration: {}", siteConfig);
+        }
+
+        final String siteToUpdate = this.model.getSelectedSiteName();
+        final String siteName = siteConfig.getSiteName();
+        if (!SafeNames.isValidConfigName(siteToUpdate) || !SafeNames.isValidConfigName(siteName)) {
+            messageContext.addMessage(siteConfig.getMessage(SRC_CONFIG_UPDATE, ILLEGAL_NAME_KEY));
+            logger.warn("Refused an update for a configuration name that is not a single safe path segment");
+            return false;
         }
 
         boolean updated = true;
-        final String siteToUpdate = this.model.getSelectedSiteName();
-
-        final String siteName = siteConfig.getSiteName();
-        final String url = siteConfig.getReportUrl();
-        final String includeFilter = siteConfig.getIncludeFilter();
-        final String excludeFilter = siteConfig.getExcludeFilter();
-        final boolean titleFromHTML = siteConfig.isTitleFromHTML();
-        final String titleSeparator = siteConfig.getTitleSeparator();
 
         try {
 
-            MessageResolver updateResult = jcrTemplate.doExecuteWithSystemSession(
+            MessageResolver updateResult = getJcrTemplate().doExecuteWithSystemSession(
                     new JCRCallback<MessageResolver>() {
                         @Override
                         public MessageResolver doInJCR(JCRSessionWrapper session) throws RepositoryException {
-                            JCRNodeWrapper topPagesSite = null;
-                            topPagesSite = session.getNode("/settings/top-pages/" + siteToUpdate);
+                            JCRNodeWrapper topPagesSite = findConfigNode(session, siteToUpdate);
+                            if (topPagesSite == null) {
+                                logger.warn("Unable to update the configuration {}, it no longer exists", siteToUpdate);
+                                return siteConfig.getMessage(SRC_CONFIG_UPDATE, SAVE_ERROR_KEY);
+                            }
                             try {
                                 if (!siteToUpdate.equals(siteName)) { // Updated Name
                                     topPagesSite.rename(siteName);
                                 }
-                                topPagesSite.setProperty("awStatsUrl", url);
-                                topPagesSite.setProperty("includeFilter", includeFilter);
-                                topPagesSite.setProperty("excludeFilter", excludeFilter);
-                                topPagesSite.setProperty("titleFromHTML", titleFromHTML);
-                                topPagesSite.setProperty("titleSeparator", titleSeparator);
+                                writeConfig(topPagesSite, siteConfig);
 
                                 session.save();
                             } catch (ItemExistsException e) {
                                 logger.warn("Unable to update site configuration, a site configuration with the same name already exists", e);
-                                return siteConfig.getMessage("configUpdate", "toppages.form.error.alreadyExist");
+                                return siteConfig.getMessage(SRC_CONFIG_UPDATE, ALREADY_EXISTS_KEY);
                             }
                             return null;
                         }
@@ -284,12 +295,12 @@ public class SiteconfigFlowHandler implements Serializable {
             }
 
         } catch (RepositoryException e) {//Any other node creation Issue
-            if (e.getCause().toString().contains("IllegalNameException")) {
-                messageContext.addMessage(siteConfig.getMessage("configUpdate", "toppages.form.error.IllegaleName"));
+            if (isIllegalName(e)) {
+                messageContext.addMessage(siteConfig.getMessage(SRC_CONFIG_UPDATE, ILLEGAL_NAME_KEY));
                 logger.error("Failed to update top Pages site configuration node", e);
 
             } else {
-                messageContext.addMessage(siteConfig.getMessage("configUpdate", "toppages.form.error.saveError"));
+                messageContext.addMessage(siteConfig.getMessage(SRC_CONFIG_UPDATE, SAVE_ERROR_KEY));
                 logger.error("Failed to updated top Pages site configuration node", e);
 
             }
@@ -334,6 +345,62 @@ public class SiteconfigFlowHandler implements Serializable {
             logger.info("An exception occured while updating the top pages", e);
         }
 
+    }
+
+    /**
+     * Return the configuration root, creating it - and the {@code /settings} node it hangs from -
+     * when it is not there yet.
+     */
+    private static JCRNodeWrapper getOrCreateConfigRoot(JCRSessionWrapper session) throws RepositoryException {
+        try {
+            return session.getNode(SafeNames.CONFIG_ROOT_PATH);
+        } catch (PathNotFoundException e) {//Folders has to be created
+            logger.debug("The top pages configuration root does not exist yet, creating it", e);
+            if (session.nodeExists(SETTINGS_PATH)) {
+                return session.getNode(SETTINGS_PATH).addNode(CONFIG_ROOT_NAME, GLOBAL_SETTINGS_TYPE);
+            }
+            return session.getNode("/").addNode(SETTINGS_NAME, GLOBAL_SETTINGS_TYPE)
+                    .addNode(CONFIG_ROOT_NAME, GLOBAL_SETTINGS_TYPE);
+        }
+    }
+
+    /**
+     * Resolve a configuration node by name, without ever concatenating the name into a path.
+     *
+     * @param name a name already checked with {@link SafeNames#isValidConfigName(String)}
+     * @return the node, or null when there is no configuration under that name
+     */
+    private static JCRNodeWrapper findConfigNode(JCRSessionWrapper session, String name) throws RepositoryException {
+        try {
+            JCRNodeWrapper configRoot = session.getNode(SafeNames.CONFIG_ROOT_PATH);
+            return configRoot.hasNode(name) ? configRoot.getNode(name) : null;
+        } catch (PathNotFoundException e) {
+            logger.debug("The top pages configuration root does not exist yet", e);
+            return null;
+        }
+    }
+
+    /** Read a {@code jtopmix:siteConfig} node into the form model. */
+    private static SiteConfiguration readConfig(JCRNodeWrapper node) throws RepositoryException {
+        return new SiteConfiguration(node.getName(),
+                node.getProperty(P_AWSTATS_URL).getString(),
+                node.getProperty(P_INCLUDE_FILTER).getString(),
+                node.getPropertyAsString(P_EXCLUDE_FILTER),
+                node.getProperty(P_TITLE_FROM_HTML).getBoolean(),
+                node.getPropertyAsString(P_TITLE_SEPARATOR));
+    }
+
+    /** Write the form model onto a {@code jtopmix:siteConfig} node. */
+    private static void writeConfig(JCRNodeWrapper node, SiteConfiguration site) throws RepositoryException {
+        node.setProperty(P_AWSTATS_URL, site.getReportUrl());
+        node.setProperty(P_INCLUDE_FILTER, site.getIncludeFilter());
+        node.setProperty(P_EXCLUDE_FILTER, site.getExcludeFilter());
+        node.setProperty(P_TITLE_FROM_HTML, site.isTitleFromHTML());
+        node.setProperty(P_TITLE_SEPARATOR, site.getTitleSeparator());
+    }
+
+    private static boolean isIllegalName(RepositoryException e) {
+        return e.getCause() != null && e.getCause().toString().contains("IllegalNameException");
     }
 
     private String getParentPage(JCRNodeWrapper node) throws RepositoryException {

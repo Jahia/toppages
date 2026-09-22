@@ -47,10 +47,10 @@ public class AWStatsPage implements Comparable<AWStatsPage> {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (!(o instanceof AWStatsPage)) return false;
-        AWStatsPage AWStatsPage = (AWStatsPage) o;
-        return viewCount == AWStatsPage.viewCount &&
-                Objects.equals(url, AWStatsPage.url) &&
-                Objects.equals(title, AWStatsPage.title);
+        AWStatsPage other = (AWStatsPage) o;
+        return viewCount == other.viewCount &&
+                Objects.equals(url, other.url) &&
+                Objects.equals(title, other.title);
     }
 
     @Override

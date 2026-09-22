@@ -58,9 +58,10 @@ yarn run e2e:debug         # interactive runner (yarn e2e:ci for headless)
 | Spec                  | Covers                                                                              |
 |-----------------------|-------------------------------------------------------------------------------------|
 | `01-serverSettings`   | The webflow at *Administration → Server → Configuration → Top Pages*: create, validate, list, edit, rename, reject duplicates, delete — each verified in the UI *and* under `/settings/top-pages` |
-| `02-topPagesActions`  | `updateTopPages` / `getTopPages`: report parsing and ranking, `jsonResult` caching, multi-month aggregation, `titleFromHTML`, global-config inheritance, the unreachable-report error path, the admin node listing, the live/anonymous path, plus two `KNOWN DEFECT` characterization tests |
+| `02-topPagesActions`  | `updateTopPages` / `getTopPages`: report parsing and ranking, `jsonResult` caching, multi-month aggregation, `titleFromHTML`, global-config inheritance, the unreachable-report error path, the admin node listing, the live/anonymous path, the POST-only guard on `updateTopPages`, plus one `KNOWN DEFECT` characterization test |
 | `03-editorExperience` | The component's visibility and type label in jContent, asserted as `root` **and** as the editor `mathias` |
 | `04-permissions`      | Who may open the server-settings page, with an administrator positive control       |
+| `05-componentView`    | The component's own view (`jtopmix_topPages/html/topPages.jsp`) rendered in a page: the edit-mode button, the POST it fires and the list the script builds, the escaping of a stored title, and the live/anonymous rendering |
 
 ## Things that will bite you
 
@@ -86,6 +87,14 @@ Each of these cost real debugging time; all of them fail in a way that points so
   `titleFromHTML` with `getProperty()` inside a `try` that swallows
   `PathNotFoundException`: one missing property and the configuration silently reads back
   as `null`.
+- **Edit mode does not stay on the url you asked for.** Visiting `/cms/edit/default/<lang>/<page>.html`
+  sends the browser on to `/jahia/jcontent/<site>/<lang>/pages/...`, which renders the page in an
+  iframe. Anything asserted about a view in edit mode has to reach into
+  `iframe[data-sel-role="page-builder-frame-active"]` -- at the top level the selectors simply never
+  resolve, and the failure reads as "element not found", not as "you are on another page".
+- **Saving a `jtopmix:topPages` node already fills `jsonResult`.** The module's Drools rule fires on
+  save, so a freshly created node renders its list before anyone presses "Update Top Pages". A test
+  of the button has to overwrite `jsonResult` with a sentinel first, or it asserts nothing.
 - **`cy.contains()` matches substrings.** The rename test deliberately renames to
   `e2e-renamed-report`, not `e2e-settings-report-renamed`, or the "old name is gone"
   assertion could never fail.
@@ -98,14 +107,11 @@ Each of these cost real debugging time; all of them fail in a way that points so
 
 ## Known defects the suite records
 
-Two tests are named `KNOWN DEFECT`. They assert the *current, broken* behaviour so that
-fixing the module makes them fail, which is the signal to turn them into positive
-assertions. They are not an endorsement of the behaviour.
+One test is named `KNOWN DEFECT`. It asserts the *current, broken* behaviour so that fixing
+the module makes it fail, which is the signal to turn it into a positive assertion. It is
+not an endorsement of the behaviour.
 
-1. **The edit-mode "Update Top Pages" button cannot work on Jahia 8.2.**
-   `jtopmix_topPages/html/topPages.jsp` calls `$.getJSON(updateActionUrl)` — a GET —
-   while `UpdateTopPagesAction` inherits `requiredMethods = ["POST"]`. Measured: 405.
-2. **One Top Pages node outside a page empties the whole administration listing.**
+1. **One Top Pages node outside a page empties the whole administration listing.**
    `SiteconfigFlowHandler.getParentPage()` recurses upwards until it finds a `jnt:page`;
    content under `/sites/<site>/contents` has none, so it walks past the repository root
    and throws. `getAllNodes()` catches the exception and never populates the model, so

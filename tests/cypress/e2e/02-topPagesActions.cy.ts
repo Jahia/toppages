@@ -165,7 +165,9 @@ describe('Top Pages actions', () => {
         const brokenName = 'top-pages-broken';
         const brokenPath = `${containerPath}/${brokenName}`;
 
-        createSiteConfig(brokenReport, {awStatsUrl: `${AWSTATS_REPORT_URL.replace('awstats.pl', '')}does-not-exist.pl`});
+        createSiteConfig(brokenReport, {
+            awStatsUrl: `${AWSTATS_REPORT_URL.replace('awstats.pl', '')}does-not-exist.pl`
+        });
         createTopPagesNode(containerPath, brokenName, {jahiaSite: brokenReport, nMonths: 1});
 
         callAction(brokenPath, 'updateTopPages');
@@ -232,15 +234,15 @@ describe('Top Pages actions', () => {
         });
     });
 
-    it('KNOWN DEFECT: rejects the GET that the edit-mode button actually sends', () => {
-        // The view jtopmix_topPages/html/topPages.jsp drives the "Update Top Pages" button with
-        // $.getJSON(updateActionUrl) -- a GET. org.jahia.bin.Action defaults
-        // requiredMethods to ["POST"] and UpdateTopPagesAction never overrides it, so on
-        // Jahia 8.2 that button cannot work.
+    it('rejects a GET on updateTopPages, which rewrites content', () => {
+        // UpdateTopPages fetches a remote report and rewrites the node: it must not be
+        // reachable through a GET, which a third-party page can trigger with nothing more
+        // than an <img src>. org.jahia.bin.Action defaults requiredMethods to ["POST"] and
+        // UpdateTopPagesAction keeps that default, so the answer is 405.
         //
-        // This records the defect rather than blessing it: fix the JSP (or set
-        // requiredMethods on the action) and this test will fail, which is the signal to
-        // change it into an assertion that the button succeeds.
+        // jtopmix_topPages/html/topPages.jsp used to drive its "Update Top Pages" button with
+        // $.getJSON(updateActionUrl) -- a GET -- so the button could never work on Jahia 8.2.
+        // The view now sends the POST this assertion pins as the only accepted method.
         cy.login();
         getCsrfToken()
             .then((token: CsrfToken) =>

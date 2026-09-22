@@ -7,4 +7,4 @@
 //
 // https://on.cypress.io/custom-commands
 
-import 'cypress-wait-until';
+import 'cypress-wait-until'
