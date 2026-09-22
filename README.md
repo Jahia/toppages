@@ -109,12 +109,11 @@ standing in for the AWStats CGI). See [`tests/README.md`](tests/README.md) for h
 and run it.
 
 # Current limitations
-- **One Top Pages node outside a page empties the whole administration listing.**
-  `SiteconfigFlowHandler.getParentPage()` walks up until it finds a `jnt:page`; a node with
-  no page ancestor — content under `/sites/<site>/contents`, for instance — makes it recurse
-  past the repository root, and the exception is swallowed without populating the model. The
-  result is that *every* row of "Show all Top Pages nodes" disappears, not just the
-  offending one. The e2e suite pins this behaviour as a known defect.
+- **A Top Pages node outside any page has no "View Page" link.** "Show all Top Pages nodes"
+  resolves each node's enclosing `jnt:page`; content that lives outside one — under
+  `/sites/<site>/contents`, for instance — is listed with the rest, but with nothing to link
+  to. (Until 2.0.3 such a node emptied the *whole* table: the upward walk recursed past the
+  repository root and the exception was swallowed without populating the model.)
 - **The update rule does not fire on `awStatsUrl`.** Changing only that property on a node
   with `overrideConfig` set will not refresh the result; change another property, press
   "Update Top Pages", or wait for the scheduled job.

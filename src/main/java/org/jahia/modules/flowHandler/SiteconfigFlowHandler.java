@@ -34,6 +34,10 @@ public class SiteconfigFlowHandler implements Serializable {
     private static final String GLOBAL_SETTINGS_TYPE = "jnt:globalSettings";
     private static final String SITE_CONFIG_TYPE = "jtopmix:siteConfig";
 
+    /** Node types the upward walk for an enclosing page recognises, and the one it stops at. */
+    private static final String PAGE_TYPE = "jnt:page";
+    private static final String SITE_TYPE = "jnt:virtualsite";
+
     /** Properties of a {@code jtopmix:siteConfig} node. */
     private static final String P_AWSTATS_URL = "awStatsUrl";
     private static final String P_INCLUDE_FILTER = "includeFilter";
@@ -324,26 +328,32 @@ public class SiteconfigFlowHandler implements Serializable {
             jcrSessionWrapper = JCRSessionFactory.getInstance().getCurrentUserSession("default");
             NodeIterator iterator = jcrSessionWrapper.getWorkspace().getQueryManager().createQuery(query, Query.JCR_SQL2).execute().getNodes();
             if (!iterator.hasNext()) {
-                logger.info("No top pages nodes available to update");
-                return;
+                logger.info("No top pages nodes available to list");
             }
             while (iterator.hasNext()) {
                 JCRNodeWrapper node = (JCRNodeWrapper) iterator.nextNode();
-                String jahiaSite = node.getPropertyAsString("jahiaSite");
-                String parentPage = getParentPage(node);
-                String defaultLang = node.getResolveSite().getDefaultLanguage();
-                TopPagesNode s = new TopPagesNode(node.getName(), jahiaSite, node.getPath(), node.getLastPublishedAsDate(), defaultLang, parentPage);
-                allNodes.add(s);
+                // Per node, so that one unreadable row is skipped and logged instead of
+                // emptying the whole table: the listing is a diagnostic screen, and a
+                // diagnostic screen that hides everything because of a single bad node is
+                // worse than useless.
+                try {
+                    allNodes.add(readNode(node));
+                } catch (RepositoryException e) {
+                    logger.warn("Skipping a top pages node that could not be read: {}", node.getPath(), e);
+                }
             }
-            //Sort by siteName
-            Comparator<TopPagesNode> compareBySite = Comparator.comparing(TopPagesNode::getJahiaSite);
+            //Sort by siteName, tolerating a node whose jahiaSite property was never set.
+            Comparator<TopPagesNode> compareBySite =
+                    Comparator.comparing(TopPagesNode::getJahiaSite, Comparator.nullsLast(Comparator.naturalOrder()));
             Collections.sort(allNodes, compareBySite);
-            context.getFlowScope().put("allNodes", allNodes);
-
 
         } catch (RepositoryException e) {
-            logger.info("An exception occured while updating the top pages", e);
+            logger.error("An exception occurred while listing the top pages nodes", e);
         }
+
+        // Always published, even empty or partial: an absent flow-scope variable is what
+        // made a single failure erase the entire table.
+        context.getFlowScope().put("allNodes", allNodes);
 
     }
 
@@ -403,10 +413,38 @@ public class SiteconfigFlowHandler implements Serializable {
         return e.getCause() != null && e.getCause().toString().contains("IllegalNameException");
     }
 
-    private String getParentPage(JCRNodeWrapper node) throws RepositoryException {
-        if (node.getParent().getPrimaryNodeTypeName().equals("jnt:page")) {
-            return node.getParent().getPath();
+    /** Read one {@code jtopmix:topPages} node into the row the listing renders. */
+    private static TopPagesNode readNode(JCRNodeWrapper node) throws RepositoryException {
+        return new TopPagesNode(node.getName(),
+                node.getPropertyAsString("jahiaSite"),
+                node.getPath(),
+                node.getLastPublishedAsDate(),
+                node.getResolveSite().getDefaultLanguage(),
+                getParentPage(node));
+    }
+
+    /**
+     * Path of the {@code jnt:page} the node is rendered in, or {@code null} when it has none.
+     *
+     * The walk is iterative and bounded twice over: it stops at the site node, and in any
+     * case at the repository root. Content that lives outside any page - under
+     * {@code /sites/<site>/contents}, for instance - therefore simply has no parent page.
+     * The previous recursive version relied on {@code getParent()} throwing once it walked
+     * past the root, which turned one such node into a {@code RepositoryException} that
+     * emptied the whole administration listing.
+     */
+    private static String getParentPage(JCRNodeWrapper node) throws RepositoryException {
+        JCRNodeWrapper current = node;
+        while (current.getDepth() > 0) {
+            JCRNodeWrapper parent = current.getParent();
+            if (parent.isNodeType(PAGE_TYPE)) {
+                return parent.getPath();
+            }
+            if (parent.isNodeType(SITE_TYPE)) {
+                return null;
+            }
+            current = parent;
         }
-        return getParentPage(node.getParent());
+        return null;
     }
 }

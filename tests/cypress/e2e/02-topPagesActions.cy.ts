@@ -42,8 +42,9 @@ describe('Top Pages actions', () => {
         createSiteConfig(reportName, {awStatsUrl: AWSTATS_REPORT_URL});
 
         // A jnt:contentList directly under the home page: jtopmix:topPages is
-        // jmix:droppableContent, and a page ancestor is required by the admin listing
-        // (SiteconfigFlowHandler.getParentPage walks up until it finds a jnt:page).
+        // jmix:droppableContent, and this gives the node an enclosing jnt:page one level up,
+        // so SiteconfigFlowHandler.getParentPage has a page to find and the listing a "View
+        // Page" link to render. The node outside any page is created by its own test.
         removeNodeIfPresent(containerPath);
         addNode({
             parentPathOrId: '/sites/digitall/home',
@@ -183,8 +184,7 @@ describe('Top Pages actions', () => {
 
     it('lists the node in the administration page, with its report and page path', () => {
         // "Show all Top Pages nodes" runs a JCR-SQL2 query and resolves each node's
-        // enclosing page; a node with no jnt:page ancestor makes getParentPage recurse
-        // past the repository root, which is why the fixture lives under /home.
+        // enclosing page with getParentPage().
         cy.login();
         cy.visit(SETTINGS_URL);
         cy.get('#getAllPages').click();
@@ -193,10 +193,17 @@ describe('Top Pages actions', () => {
             cy.contains('tr', nodeName).should('exist');
             cy.contains('tr', nodeName).contains('td', reportName).should('exist');
             cy.contains('tr', nodeName).contains('td', nodePath).should('exist');
+            // A node that does sit inside a page still gets its "View Page" link, pointing
+            // at the enclosing page -- the home page, not the jnt:contentList in between.
+            cy.contains('tr', nodeName)
+                .contains('a', 'View Page')
+                .should('have.attr', 'href')
+                .and('include', `/cms/edit/default/${LANGUAGE}`)
+                .and('include', `/sites/${SITE_KEY}/home.html`);
         });
     });
 
-    it('KNOWN DEFECT: one node outside a page empties the whole administration listing', () => {
+    it('lists a node outside any page alongside the others', () => {
         cy.login();
         const orphanName = 'e2e-top-pages-orphan';
         const orphanParent = `/sites/${SITE_KEY}/contents`;
@@ -205,16 +212,26 @@ describe('Top Pages actions', () => {
         cy.visit(SETTINGS_URL);
         cy.get('#getAllPages').click();
 
-        // GetAllNodes() resolves every node's enclosing page with getParentPage(), which
-        // recurses upwards until it hits a jnt:page. Content under /sites/<site>/contents
-        // has no page ancestor, so the recursion walks past the repository root and throws;
-        // the RepositoryException is caught and the model is never populated. The blast
-        // radius is the whole table -- the perfectly valid node asserted just above
-        // disappears from the administration screen too.
+        // GetAllNodes() resolves every node's enclosing page. Content under
+        // /sites/<site>/contents has no jnt:page ancestor: getParentPage() used to recurse
+        // upwards until getParent() threw past the repository root, the RepositoryException
+        // was caught around the whole loop, and the flow-scope variable was never
+        // populated -- so ONE misplaced node emptied the entire table, taking the perfectly
+        // valid node asserted just above with it.
         //
-        // Fix getParentPage() to stop at the site (or skip the node) and this test fails,
-        // which is the signal to turn it into an assertion that both nodes are listed.
-        cy.get('#allTopPagesNodes').should('not.contain.text', nodeName);
+        // The walk now terminates at the site node and at the root, and each row is read
+        // under its own try, so both of these must be listed.
+        cy.get('#allTopPagesNodes').within(() => {
+            cy.contains('tr', orphanName).should('exist');
+            cy.contains('tr', orphanName).contains('td', `${orphanParent}/${orphanName}`).should('exist');
+            // And the valid node is still there: the orphan did not take the table down.
+            cy.contains('tr', nodeName).should('exist');
+            cy.contains('tr', nodeName).contains('td', nodePath).should('exist');
+        });
+
+        // No enclosing page means no link to it -- not a link to
+        // /cms/edit/default/en/.html, which is what interpolating a null path produces.
+        cy.contains('#allTopPagesNodes tr', orphanName).find('a').should('not.exist');
 
         removeNodeIfPresent(`${orphanParent}/${orphanName}`);
     });

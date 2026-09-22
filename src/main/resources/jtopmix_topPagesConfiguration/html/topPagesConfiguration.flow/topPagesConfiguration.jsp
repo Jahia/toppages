@@ -169,9 +169,21 @@
                                                 </c:choose>
                                             </td>
                                             <td>
-                                                <c:url value="${url.server}/cms/edit/default/${node.defaultLanguage}/${node.parentPage}.html"
-                                                       var="editUrl"/>
-                                                <a href="${fn:escapeXml(editUrl)}" target="_blank"> View Page </a></td>
+                                                <%-- A top pages node does not have to live inside a page (content under
+                                                     /sites/<site>/contents has no page ancestor). Such a node is still
+                                                     listed, but there is nothing to link to, so no link is emitted
+                                                     rather than one pointing at /cms/edit/default/en/.html --%>
+                                                <c:choose>
+                                                    <c:when test="${empty node.parentPage}">
+                                                        No enclosing page
+                                                    </c:when>
+                                                    <c:otherwise>
+                                                        <c:url value="${url.server}/cms/edit/default/${node.defaultLanguage}/${node.parentPage}.html"
+                                                               var="editUrl"/>
+                                                        <a href="${fn:escapeXml(editUrl)}" target="_blank"> View Page </a>
+                                                    </c:otherwise>
+                                                </c:choose>
+                                            </td>
                                         </tr>
                                     </c:forEach>
                                 </table>

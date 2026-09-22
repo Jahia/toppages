@@ -63,10 +63,10 @@ one was copied from still have that bug.
 | Spec                  | Covers                                                                              |
 |-----------------------|-------------------------------------------------------------------------------------|
 | `01-serverSettings`   | The webflow at *Administration → Server → Configuration → Top Pages*: create, validate, list, edit, rename, reject duplicates, delete — each verified in the UI *and* under `/settings/top-pages` |
-| `02-topPagesActions`  | `updateTopPages` / `getTopPages`: report parsing and ranking, `jsonResult` caching, multi-month aggregation, `titleFromHTML`, global-config inheritance, the unreachable-report error path, the admin node listing, the live/anonymous path, the POST-only guard on `updateTopPages` and its refusal of an anonymous caller, plus one `KNOWN DEFECT` characterization test |
+| `02-topPagesActions`  | `updateTopPages` / `getTopPages`: report parsing and ranking, `jsonResult` caching, multi-month aggregation, `titleFromHTML`, global-config inheritance, the unreachable-report error path, the admin node listing *including a node that lives outside any page*, the live/anonymous path, the POST-only guard on `updateTopPages` and its refusal of an anonymous caller |
 | `03-editorExperience` | The component's visibility and type label in jContent, asserted as `root` **and** as the editor `mathias` |
 | `04-permissions`      | Who may open the server-settings page, with an administrator positive control       |
-| `05-componentView`    | The component's own view (`jtopmix_topPages/html/topPages.jsp`) rendered in a page: the edit-mode button, the POST it fires and the list the script builds, the `customCSS` class actually being applied, the escaping of a stored title, and the live/anonymous rendering |
+| `05-componentView`    | The component's own view (`jtopmix_topPages/html/topPages.jsp`) rendered in a page: the edit-mode button, the POST it fires and the list the script builds, the `customCSS` class actually being applied, the escaping of a stored title in edit mode **and for an anonymous live visitor**, and the live/anonymous rendering |
 
 ## Things that will bite you
 
@@ -108,19 +108,16 @@ Each of these cost real debugging time; all of them fail in a way that points so
   `mathias` (editor, password `password`, shipped by Digitall's `users.zip`).
 - **Specs clear `/settings/top-pages` in `before()`** and delete what they created in
   `after()`, so any spec can be run on its own and an interrupted run cannot poison the
-  next one. This matters more than usual here — see the known defect below.
-
-## Known defects the suite records
-
-One test is named `KNOWN DEFECT`. It asserts the *current, broken* behaviour so that fixing
-the module makes it fail, which is the signal to turn it into a positive assertion. It is
-not an endorsement of the behaviour.
-
-1. **One Top Pages node outside a page empties the whole administration listing.**
-   `SiteconfigFlowHandler.getParentPage()` recurses upwards until it finds a `jnt:page`;
-   content under `/sites/<site>/contents` has none, so it walks past the repository root
-   and throws. `getAllNodes()` catches the exception and never populates the model, so
-   *every* row disappears, not just the offending one.
+  next one.
+- **A `"><img …>` payload cannot prove the escaping of this view.** Every stored value the
+  view carries — `jcr:title`, `jsonResult`, `lastErrorReceived` — used to be interpolated
+  *inside* a `<script>` block, where that payload is inert text and a probe using it
+  reports the sink as safe. An HTML parser ends a `<script>` element at the first
+  `</script>` whatever the JavaScript quoting around it, so the XSS regression tests use a
+  script-breaking payload (`</script><img src=x onerror=…>`) and assert on the raw
+  response as well as on the parsed DOM. The `jcr:title` carrier reaches **any anonymous
+  visitor** on an ordinary live page; only `lastErrorReceived` is administrator-only,
+  because the JSP keeps it inside `<c:if test="${renderContext.editMode}">`.
 
 ## Known gap
 

@@ -53,9 +53,43 @@ describe('Top Pages component view', () => {
     const xssNodePath = `${areaPath}/${xssNodeName}`;
     const xssResultId = `result-${xssNodeName}-${areaName}`;
     const xssButtonId = `updateBtn-${xssNodeName}-${areaName}`;
-    // A stored title is content: an editor can write this, and the view used to build its
-    // markup by string concatenation, so it used to execute.
-    const xssTitle = '<img src=x onerror="window.__toppagesXss = true">Most visited';
+
+    /**
+     * The payload from the JAHIA-SEC-411 fiche, and the only shape that can detect this
+     * vulnerability class.
+     *
+     * Every carrier this view ever interpolated -- jcr:title, jsonResult, lastErrorReceived
+     * -- sat INSIDE a <script> block. The `"><img ...>` payload that proves the sibling
+     * fiches is inert in that position: it is just text in a script, and a probe using it
+     * reports the sink as safe. An HTML parser, however, ends a <script> element at the
+     * first `</script>` regardless of the JavaScript string quoting around it, so a
+     * script-breaking payload -- and only a script-breaking payload -- turns the injection
+     * into a real element whose handler runs.
+     */
+    const xssTitle = '</script><img src=x onerror="window.__toppagesXss = true">Most visited';
+
+    /** What fn:escapeXml makes of the head of that payload, quotes excluded. */
+    const escapedXssHead = '&lt;/script&gt;&lt;img src=x onerror=';
+
+    /** The default-workspace render, fetched as markup rather than through the browser. */
+    const renderUrl = `/cms/render/default/${LANGUAGE}${pagePath}.html`;
+
+    /**
+     * Assert on the HTML as it leaves the server, which is where this bug lives.
+     *
+     * The DOM assertions below can only observe what the parser made of the response; this
+     * one observes the response itself, and is the direct form of the fiche's reproduction
+     * step. `</script>` must reach the browser escaped, or the script element is terminated
+     * early and everything after it is markup.
+     */
+    const assertPayloadIsInert = (body: string): void => {
+        // Booleans rather than expect(body).to.contain(...): chai prints the subject on
+        // failure, and the subject here is a whole rendered Digitall page, which buries the
+        // one line that matters under 60kB of markup.
+        expect(body.includes(escapedXssHead), 'escaped payload in the served html').to.be.true;
+        expect(body.includes('</script><img'), 'unescaped </script> from the stored title').to.be.false;
+        expect(/<img[^>]*onerror/i.test(body), 'an img carrying an event handler in the served html').to.be.false;
+    };
 
     // Saving a jtopmix:topPages node fires the module's Drools rule, which fills jsonResult
     // straight away -- so the list is already on screen before the button is ever pressed.
@@ -192,6 +226,14 @@ describe('Top Pages component view', () => {
     it('renders a stored title as text, never as markup', () => {
         cy.login();
         setNodeProperty(xssNodePath, 'jsonResult', JSON.stringify(sentinel), LANGUAGE);
+
+        // First on the wire: the title must arrive escaped, with its `</script>` unable to
+        // close the block the script travels in.
+        cy.request(renderUrl).then(response => {
+            expect(response.status).to.eq(200);
+            assertPayloadIsInert(response.body as string);
+        });
+
         cy.visit(editModeUrl);
 
         // The heading must read the payload back literally, and nothing may have been
@@ -211,6 +253,33 @@ describe('Top Pages component view', () => {
                 expect((win as unknown as Record<string, unknown>).__toppagesXss, 'injected onerror handler').to.be
                     .undefined;
             });
+    });
+
+    it('serves a stored title inert to an anonymous visitor in live mode', () => {
+        // The fiche is explicit that the victim of this carrier is ANY anonymous visitor,
+        // not only an administrator: jcr:title renders on an ordinary page in live mode,
+        // unlike ${updateError} (lastErrorReceived), which the JSP keeps inside
+        // <c:if test="${renderContext.editMode}"> and is therefore administrator-only.
+        // A logged-out request on the live url plus a string assertion on the raw response
+        // is the fiche's own reproduction step.
+        cy.login();
+        setNodeProperty(xssNodePath, 'jsonResult', JSON.stringify(sentinel), LANGUAGE);
+        publishAndWaitJobEnding(pagePath, [LANGUAGE]);
+
+        cy.logout();
+        cy.request(liveUrl).then(response => {
+            expect(response.status).to.eq(200);
+            assertPayloadIsInert(response.body as string);
+        });
+
+        // And once the browser has parsed it: the title is a text node, the handler never ran.
+        cy.visit(liveUrl);
+        cy.get(`#${xssResultId} h3`).should('have.text', xssTitle);
+        cy.get(`#${xssResultId} img`).should('not.exist');
+        cy.window().then(win => {
+            expect((win as unknown as Record<string, unknown>).__toppagesXss, 'injected onerror handler').to.be
+                .undefined;
+        });
     });
 
     it('renders the published result for an anonymous visitor', () => {
