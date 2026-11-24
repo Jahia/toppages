@@ -65,6 +65,8 @@
   </scm>
   <properties>
     <jahia-depends>default,serverSettings</jahia-depends>
+    <!-- 5.18, the version of the 8.1.0.0 parent, fails in the dependencies goal (NoClassDefFoundError: ParsingContext) -->
+    <jahia.plugin.version>6.10</jahia.plugin.version>
     <!--
       No osgi.extender require-capability, and no META-INF/spring: this module has no Spring
       context and needs none. Every service is an OSGi Declarative Services component, and the
