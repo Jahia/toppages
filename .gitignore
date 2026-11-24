@@ -22,3 +22,5 @@ repository.xml.generated
 /src/main/resources/javascript/apps/*.js
 /src/main/resources/javascript/apps/*.js.map
 /src/main/resources/javascript/apps/*.LICENSE.txt
+/src/main/resources/javascript/apps/bom
+/src/main/resources/javascript/apps/.well-known

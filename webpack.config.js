@@ -19,6 +19,14 @@ const {ModuleFederationPlugin} = require('webpack').container;
 const getModuleFederationConfig = require('@jahia/webpack-config/getModuleFederationConfig');
 
 const packageJson = require('./package.json');
+const {CycloneDxWebpackPlugin} = require('@cyclonedx/webpack-plugin');
+
+/** @type {import('@cyclonedx/webpack-plugin').CycloneDxWebpackPluginOptions} */
+const cycloneDxWebpackPluginOptions = {
+    specVersion: '1.4',
+    rootComponentType: 'library',
+    outputLocation: './bom'
+};
 
 // Where the maven-resources phase picks the bundle up from. Everything webpack writes here is
 // generated and git-ignored; javascript/apps/jahia.json next to it is a source file.
@@ -69,7 +77,8 @@ module.exports = (env, argv) => {
                 exposes: {
                     './init': './src/javascript/init'
                 }
-            }))
+            })),
+            new CycloneDxWebpackPlugin(cycloneDxWebpackPluginOptions)
         ],
         devtool: mode === 'production' ? false : 'source-map',
         performance: {hints: false},
