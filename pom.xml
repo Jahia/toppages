@@ -74,7 +74,7 @@
       the flow was the only thing that needed a context, because WebflowDispatcherScript resolves
       its executor through JahiaTemplatesPackage.getContext().
     -->
-    <node.version>v18.20.4</node.version>
+    <node.version>v22.20.0</node.version>
   </properties>
   <dependencies>
     <!--
@@ -114,7 +114,7 @@
     <dependency>
       <groupId>org.jsoup</groupId>
       <artifactId>jsoup</artifactId>
-      <version>1.15.3</version>
+      <version>1.24.1</version>
     </dependency>
     <dependency>
       <groupId>org.apache.httpcomponents</groupId>
@@ -146,6 +146,14 @@
           <instructions>
             <!-- Scan every class for DS annotations and emit OSGI-INF/*.xml + Service-Component. -->
             <_dsannotations>*</_dsannotations>
+            <!--
+              jsoup (embedded) is a multi-release jar since the versions that fix its advisories. The bnd
+              of this parent cannot read its META-INF/versions/11 layer; the OSGi class loader ignores
+              that layer at runtime and uses the Java 8 classes, so only these build messages are dropped.
+              jsoup refers to re2j and jspecify only when they are present: import them as optional.
+            -->
+            <_fixupmessages>"Classes found in the wrong directory";is:=ignore,"Invalid class file META-INF/versions/*";is:=ignore,"Exception: Index *";is:=ignore</_fixupmessages>
+            <Import-Package>com.google.re2j;resolution:=optional,org.jspecify.annotations;resolution:=optional,${jahia.plugin.projectPackageImport},*</Import-Package>
           </instructions>
         </configuration>
       </plugin>
